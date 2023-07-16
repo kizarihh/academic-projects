@@ -1,0 +1,581 @@
+---
+title: "**Parte 1.** Preparación y modelado de los datos"
+subtitle: "Datos no estructurados"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_depth: 6
+    number_sections: TRUE
+    toc_float:
+      smooth_scroll: TRUE
+      collapsed: FALSE
+editor_options: 
+  chunk_output_type: inline
+---
+
+`Equipo #3`
+
+- Carolina Velarde Díaz A01720509
+- Chantal Aimeé Simó García A00827554
+- Ximena Araceli Martínez Flores A00829670
+- Kízari Hernández Huerta A00828451
+
+## **Antecedentes**
+
+Fundada en 1982 por un pequeño grupo de emprendedores, Softtek comenzó en México proporcionando servicios de TI locales y hoy es un líder global en soluciones digitales de próxima generación. La primera compañía en introducir el modelo *Nearshore*, Softtek ayuda a las empresas Global 2000 a desarrollar capacidades digitales de manera fluida y constante, desde la ideación y construcción hasta la ejecución y su evolución. Su impulso emprendedor la ha llevado a operar en más de 20 países y contar con más de 15,000 profesionales. 
+
+Actualmente Softtek es la empresa privada de tecnologías de información más grande de México y de América Latina.
+
+## **Descripción de la situación problema**
+
+La industria de servicios financieros con frecuencia son blancos de diversas formas de delitos financieros y fraudes. Los escenarios han cambiado con el paso del tiempo y los actores maliciosos han amoldado sus tácticas para adaptarse mejor al mundo digital. 
+
+Es por ello que estas soluciones estarán enfocadas en el sector financiero, específicamente en instituciones financieras que requieran transformación en *FinTech* y *Customer Experience Banking Solutions*. 
+
+Nuestras propuestas buscan mejorar la experiencia del usuario dentro del sector financiero al ofrecer servicios más seguros, confiables y personalizados que los beneficiará y diferenciará con valor agregado.
+
+## **Spam or Ham Detection System**
+
+**Identificación de usuarios vulnerables en casos de estafas tecnológicas**
+
+- Casi el 85% de todos los correos electrónicos son spam <b>*(Cveticanin, 2022)*</b>.
+- Las estafas y el fraude son solo el 2.5 % de todos los correos de spam; sin embargo, las estadísticas de phishing indican que el robo de identidad representa el 73% de esta cifra <b>*(Cveticanin, 2022)*</b>.
+- Los americanos admiten haber perdido más de $ 70,000 USD en estafas del príncipe nigeriano (o 419) en 2019 <b>*(Cveticanin, 2022)*</b>.
+
+Con el uso del Procesamiento de Lenguaje Natural (PLN) se identificará como varía el lenguaje usado en ambos medios de comunicación, para, así, poder detectar cuando un mensaje es Spam o Ham. Este sistema será incorporado en una plataforma utilizando API's donde se pueda ingresar el correo o sms y este mismo detecte con un porcentaje de precisión si es Spam o Ham.
+
+### Valor agregado de nuestra propuesta
+
+**Personalización**:
+    Servicio 100% personalizado para los clientes.
+    
+**Precisión**:
+    Detección y prevención de cibercrímenes para los usuarios.
+    
+**Versátil**:
+    Adaptable a diferentes áreas dentro del banco.
+    
+**Confianza**:
+    Mejorar la imagen del cliente en cuanto a la protección de sus clientes.
+
+## **Datos y metodología**
+
+Las bases de datos a utilizar son:
+
+1. **SMS**: Es un conjunto de 5,559 mensajes SMS en inglés, etiquetados según sean *Ham* (legítimos) o *Spam* (kaggle, 2022).
+2. **E-mail**: Es un conjunto de 11,928 correos en inglés, etiquetados según sean *Ham* (legítimos) o *Spam* (kaggle, 2022).
+
+En este análisis, los modelos que se van a utilizar son:
+
+1. **Generalized Linear Model (GLM)**:
+    Generaliza la regresión lineal permitiendo que el modelo lineal se relacione con la variable de respuesta a través de una función de enlace y permitiendo que la magnitud de la varianza de cada medida sea una función de su valor predicho. Unifica otros modelos estadísticos, como la regresión lineal, la regresión logística y la regresión de Poisson (Zhao, 2013).
+2. **Random Forest**:
+    Está formado por un gran número de árboles de decisión individuales que funcionan como un conjunto. Cada árbol individual del bosque aleatorio despliega una predicción de clase y la clase con más votos se convierte en la predicción del modelo (Yiu, 2019).
+3. **Support Vector Machine (SVM)**:
+    Encuentra un hiperplano en un espacio de N dimensiones (N - el número de características) que clasifica claramente los puntos de datos (Gandhi, 2018).
+4. **Naive Bayes**:
+    Es una colección de algoritmos de clasificación basados en el Teorema de Bayes. No se trata de un único algoritmo, sino de una familia de algoritmos en la que todos comparten un principio común, es decir, cada par de características que se clasifican es independiente de las demás (GeeksforGeeks, 2022).
+5. **Tree-based classification model**:
+    Utiliza una serie de declaraciones condicionales para dividir los datos de entrenamiento en subconjuntos. Cada división sucesiva añade cierta complejidad al modelo, que puede utilizarse para hacer predicciones. El modelo resultante puede visualizarse como una hoja de ruta de pruebas lógicas que describe el conjunto de datos (Lee, 2020).
+
+```{r warning=FALSE,message=FALSE,include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE,message=FALSE)
+pacman::p_load(tidyverse,readr,dplyr,tidytext,magrittr,tidyr,scales,textdata,tm,SnowballC)
+pacman::p_load(wordcloud,reshape2,ggpubr,tokenizers,topicmodels,visdat)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+email <- read.csv("~/Documents/6to sem/Inteligencia artificial y analítica de datos con impacto empresarial/Inteligencia artificial con impacto empresarial/email.csv") %>%  
+  mutate(Class = ifelse(Class == 1,"Spam",ifelse(Class == 0,"Ham",NA)),
+         Type = "E-mail") 
+
+sms <-  read.csv("~/Documents/6to sem/Inteligencia artificial y analítica de datos con impacto empresarial/Inteligencia artificial con impacto empresarial/sms.csv") %>% 
+  mutate(Class = ifelse(Class == 1,"Spam",ifelse(Class == 0,"Ham",NA)),
+         Type = "SMS")
+
+mensajes <-rbind(email,sms) %>% mutate(Type = as.factor(Type),
+                                       Class = as.factor(Class))
+rm(email,sms)
+```
+
+
+## **Análisis exploratorio**
+
+Para facilidad de manipulación, se tomó la decisión de homologar las bases de datos en una sola, misma que contiene las siguientes variables:
+
+- Class: Clasificación del mensaje, ya sea *Spam* o *Ham*.
+- Text: Mensaje en bruto.
+- Type: Tipo del mensaje, ya sea *E-mail* o *SMS*.
+
+### Visualización inicial
+
+Para iniciar, se puede observar que contamos con las 3 variables explicadas con anterioridad, siendo los siguientes sus respectivos tipos de datos.
+
+```{r}
+glimpse(mensajes)
+```
+
+En continuidad, es importante mencionar que la base de datos a analizar, no cuenta con ningún NA o valor perdido.
+
+```{r graph1, echo=FALSE, warning=FALSE, fig.align='center', out.width='85%', fig.cap='**Gráfico 1.** Datos faltantes.'}
+vis_miss(mensajes) + theme_classic()
+```
+
+Ahora, se puede visualizar que de la base de datos, 66.07% son mensajes clasificados como *Ham* y 33.93% son mensajes clasificados como *Spam*.
+
+```{r}
+mensajes %>% count(Class,sort = T) %>% mutate(frecuencia = percent( n /sum(n),accuracy = 0.01))
+```
+
+Por motivos de ejemplifiación, estos son los primeros 6 mensajes de la base de datos.
+
+```{r}
+head(mensajes$Text)
+```
+
+Y, como se puede observar, 68.21% son correos y 31.79% son mensajes de SMS.
+
+```{r}
+mensajes %>% count(Type,sort = T) %>% mutate(frecuencia = percent( n /sum(n),accuracy = 0.01))
+```
+
+A continuación, se puede evidenciar que existen 2,102 valores duplicados en la base de datos. Estos procederán a ser eliminados de la misma.
+
+```{r}
+sum(duplicated(mensajes))
+mensajes <- distinct(mensajes)
+```
+
+Con las configuraciones anteriores, ahora, en total se cuenta con 10,409 mensajes clasificados como *Ham* y 4,976 mensajes clasificados como *Spam*.
+
+De igual manera, se procederá a asignar un ID a cada mensaje.
+
+```{r}
+mensajes  %<>% mutate(ID = row_number())
+mensajes %>% count(Type,Class,sort = T) %>% mutate(frecuencia = percent( n /sum(n),accuracy = 0.01))
+```
+
+
+### Estructura *Tidy*
+
+Con motivos de realizar un análisis de mejor calidad, se convertirá la base de datos en formato *tidy*, con tokenización por palabra.
+
+Esto quiere decir que como cada columna es una variable y cada fila es una observación, cada celda es un valor, o sea, la intersección entre una fila y una columna, o entre variable y observación.
+
+Ahora, se hará una lista de todos los símbolos, palabras en otros idiomas y caracteres especiales causados por el formato .html de los correos electrónicos, para poder excluirlos del análisis.
+
+```{r}
+para_filtrar <- list("2e","2c","=","nbsp","br","div","äî","3e","e9","3d","ôøω","2ci","3a","2ei",
+                     "td","ä","c","f","http","a","son","vous","href","d","href","b","g","de",".","wjhl",
+                     ",","!","e",",,.","m","la","le","je","tu","son","avez","vous","sont",".m","cote",
+                     "ci","ei","p","st","cs","da","po","ts","bt","nd","ts","st","k","cs","oso","yo",".p")  
+```
+
+De manera similar, se eliminarán las palabras vacías o *stop words*, así como los números y cualquier valor nulo o "" que resulte de este procedimiento.
+
+Y para evitar confusiones, se hará uso de la raíz de las palabras.
+
+```{r}
+mensajes_no_token <- mensajes
+mensajes %<>% unnest_tokens(word,Text) %>% 
+  anti_join(stop_words)
+
+mensajes$word <- removeNumbers(mensajes$word) 
+mensajes %<>% filter(!is.na(word)) %>% filter(!word == "") %>% 
+  dplyr::filter(!word %in% para_filtrar) %>% 
+  mutate(stem = wordStem(word)) 
+mensajes$word <- str_replace_all(mensajes$word,"_","")
+mensajes_email <- mensajes %>% dplyr::filter(Type == "E-mail") 
+mensajes_sms <- mensajes  %>% dplyr::filter(Type == "SMS")
+```
+
+
+ 
+### Frecuencia de palabras
+
+#### SMS
+
+```{r include=FALSE}
+mensajes_sms$word <- str_replace(mensajes_sms$word,"txt","text")
+mensajes_sms$word <- str_replace(mensajes_sms$word,"i.ll","ill")
+mensajes_sms$word <- gsub("\\ur\\b", paste("your"), mensajes_sms$word)
+```
+
+Como se puede observar, estas son las 5 palabras más frecuentes en SMS, tanto para *Ham* como *Spam*
+
+```{r}
+top5smsS <- mensajes_sms %>% filter(Class == "Spam") %>% count(word,Class,sort = T) %>% head(5)
+top5smsH <- mensajes_sms %>% filter(Class == "Ham") %>% count(word,Class,sort = T) %>% head(5)
+rbind(top5smsS,top5smsH)
+rm(top5smsS,top5smsH)
+```
+
+Como siguiente punto, se puede visualizar la comparativa entre palabras más usadas para cada clasificación.
+
+```{r graph2, echo=FALSE, warning=FALSE, fig.align='center', out.width='85%', fig.cap='**Gráfico 2.** Nube de palabras de mensajes SMS clasificados como *Ham* y *Spam*.'}
+mensajes_sms %>% 
+  count(word,Class,sort = T) %>% 
+  acast(word ~ Class,value.var ="n",fill = 0) %>% 
+  comparison.cloud(colors = c("#429E42","#C6440F"),title.bg.colors=NULL)
+```
+#### E-mail
+
+Similar al proceso anterior, estas son las 5 palabras más frecuentes en mensajes de correo, tanto para *Ham* como *Spam*
+
+```{r}
+top5eS <- mensajes_email %>% filter(Class == "Spam") %>% count(word,Class,sort = T) %>% head(5)
+top5eH <- mensajes_email %>% filter(Class == "Ham") %>% count(word,Class,sort = T) %>% head(5)
+rbind(top5eS,top5eH)
+rm(top5eS,top5eH)
+```
+
+Como siguiente punto, se puede visualizar la comparativa entre palabras más usadas para cada clasificación.
+
+```{r graph3, echo=FALSE, warning=FALSE, fig.align='center', out.width='85%', fig.cap='**Gráfico 3.** Nube de palabras de correos clasificados como *Ham* y *Spam*.'}
+set.seed(100)
+mensajes_email %>%
+  count(word,Class,sort = T) %>% 
+  acast(word ~ Class,value.var ="n",fill = 0) %>% 
+  comparison.cloud(colors = c("#429E42","#C6440F"),title.bg.colors=NULL)
+```
+
+
+
+### Importancia de palabras
+
+```{r}
+palabras_type <- mensajes %>%  count(word,Class,Type,sort = T) %>% ungroup() 
+palabras_totales <-palabras_type %>%group_by(Class) %>% summarise(total = sum(n))
+mensajes_zipf <- left_join(palabras_type,palabras_totales)  
+
+rm(palabras_totales,palabras_type)
+
+mensajes_zipf %<>% 
+  mutate(rank = row_number(),
+         frecuencia  = (n/total),
+   total = as.factor(total))
+```
+
+```{r include=FALSE}
+mensajes_email_zipf <- mensajes_zipf %>% filter(Type == "E-mail") 
+mensajes_sms_zipf <- mensajes_zipf %>% filter(Type =="SMS") 
+```
+
+La ley de Zipf establece que la frecuencia de aparición de una palabra es inversamente proporcional a su rango (Robinson & Silge, 2017).
+
+Es por ello que para determinar la relación entre la frecuencia de la palabra y el rango, se ejecutará una regresión logística para ambos grupos. Después, se agregará a la base de datos.
+
+```{r}
+set.seed(123123)
+cat("Email")
+lm(log10(frecuencia) ~ log10(rank), data = mensajes_email_zipf)
+cat("SMS")
+lm(log10(frecuencia) ~ log10(rank), data = mensajes_sms_zipf)
+```
+
+Obsérvese que el *Gráfico 4* está en coordenadas logarítmicas. Se puede visualizar que las palabras clasificadas como *Ham* y/o *Spam* de SMS y correos son similares entre sí, y que la relación entre el rango y la frecuencia tiene una pendiente negativa. Sin embargo, no es del todo constante.
+
+```{r graph4, echo=FALSE, warning=FALSE, fig.align='center', out.width='85%', fig.cap='**Gráfico 4.** Relación entre frecuencia y ranking de las palabras.'}
+zipf_email <- mensajes_email_zipf %>% 
+  ggplot(aes(rank, frecuencia, color = Class)) +
+  geom_abline(intercept = -0.7105, slope = -1.0038, color = "gray50", linetype = 5) +
+  geom_line(size = 0.8, alpha = 1, show.legend = T) + 
+  scale_x_log10() +scale_y_log10() + theme_classic() + 
+   scale_color_manual(values=c("#429E42","#C6440F")) + theme(legend.position="bottom")+
+   labs(title = "E-mail",
+        subtitle = "", x = "ranking", y = "frecuencia de la palabra")
+zipf_sms <- mensajes_sms_zipf %>% 
+  ggplot(aes(rank, frecuencia, color = Class)) +
+  geom_abline(intercept = -0.5523, slope = -1.0069, color = "gray50", linetype = 5) +
+  geom_line(size = 1, alpha = 0.8, show.legend = T) + 
+  scale_x_log10() +scale_y_log10() + theme_classic() + 
+   scale_color_manual(values=c("#429E42","#C6440F")) + theme(legend.position="bottom")+
+   labs(title = "SMS",subtitle = "", x = "ranking", y = "frecuencia de la palabra")
+figure <- ggarrange(zipf_email,zipf_sms, ncol = 2, nrow = 1)
+figure
+```
+
+La idea de *tf-idf* es encontrar las palabras importantes para el contenido de cada documento disminuyendo el peso de las palabras más utilizadas y aumentando el de las palabras poco utilizadas en una colección o corpus de documentos, en este caso, el conjunto de palabras en mensajes de correos y SMS.
+
+```{r include=FALSE}
+mensajes_email_zipf  %<>% bind_tf_idf(word,Type,n) %>% arrange(desc(tf_idf))
+mensajes_sms_zipf  %<>% bind_tf_idf(word,Type,n) %>% arrange(desc(tf_idf))
+rm(zipf_email,zipf_sms,figure,mensajes_zipf,mensajes_email_zipf,mensajes_sms_zipf)
+```
+
+## **Análisis de sentimientos**
+
+Antes de continuar, es de gran relevancia destacar que el análisis de sentimientos es el proceso de analizar líneas de texto con el fin de determinar el tono emocional que llevan.
+
+En este caso, se hará uso de 2 léxicos de sentimientos, los cuales son:
+
+- El primero, *Bing*, evalúa de manera binaria si una palabra es positiva o negativa. 
+- El segundo, *NRC*, evalúa a cual de los 8 sentimientos (negativo, positivo, tristeza, ira, confianza, miedo, anticipación, alegría, asco, sorpresa) pertenece la palabra.
+
+```{r}
+NRC <- get_sentiments("nrc")  # 8 sentimientos
+BING <- get_sentiments("bing") # binario -/+
+```
+
+Después de cargar los léxicos, sólo se congregó el puntaje con la palabra.
+
+```{r}
+mensajes_email  %<>% inner_join(NRC) %>% mutate(nrc = as.factor(sentiment)) %>% select(-sentiment)
+mensajes_email  %<>% inner_join(BING) %>% mutate(bing = as.factor(sentiment)) %>% select(-sentiment) 
+mensajes_sms  %<>% inner_join(NRC) %>% mutate(nrc = as.factor(sentiment)) %>% select(-sentiment)
+mensajes_sms  %<>% inner_join(BING) %>% mutate(bing = as.factor(sentiment)) %>% select(-sentiment) 
+```
+
+### SMS
+
+#### NRC
+
+Como se puede evidenciar, el sentimiento más frecuente en los mensajes clasificados como *Ham* son positivismo, negativismo y alegría. Mientras que para mensajes clasificados como *Spam* los sentimientos más frecuentes son positivismo, anticipación y sorpresa.
+
+```{r}
+nrc_sms_ham<- mensajes_sms %>%filter(Class == "Ham") %>% count(nrc,sort = T) %>% 
+  mutate(Ham = n) %>% select(-n) %>% arrange(desc(Ham)) %>% 
+  mutate(frecuencia = percent( Ham /sum(Ham),accuracy = 0.01))
+nrc_sms_spam <- mensajes_sms %>%filter(Class == "Spam") %>% count(nrc,sort = T) %>% 
+  mutate(Spam = n)%>% select(-n)%>% arrange(desc(Spam)) %>% 
+  mutate(frecuencia = percent( Spam /sum(Spam),accuracy = 0.01))
+(nrc_sms = cbind(nrc_sms_ham,nrc_sms_spam))
+```
+#### Bing
+
+Ahora, en una clasificación binaria, se puede asumir que tanto para mensajes *Ham* como *Spam* se tiende a recibir mensajes más positivos que negativos.
+
+```{r}
+mensajes_sms %>% count(Class,bing) %>% mutate(frecuencia = percent( n /sum(n),accuracy = 0.01))
+```
+
+### E-mail
+
+#### NRC
+
+De manera análoga, el sentimiento más frecuente en los mensajes clasificados como *Ham* son negativismo, positivismo y miedo. Mientras que para mensajes clasificados como *Spam* los sentimientos más frecuentes son positivismo, anticipación y sorpresa.
+
+```{r}
+nrc_email_ham<- mensajes_email %>%filter(Class == "Ham") %>% count(nrc,sort = T) %>% 
+  mutate(Ham = n) %>% select(-n) %>% arrange(desc(Ham))  %>% 
+  mutate(frecuencia = percent( Ham /sum(Ham),accuracy = 0.01))
+
+nrc_email_spam <- mensajes_sms %>%filter(Class == "Spam") %>% count(nrc,sort = T) %>% 
+  mutate(Spam = n)%>% select(-n)%>% arrange(desc(Spam))%>% 
+  mutate(frecuencia = percent( Spam /sum(Spam),accuracy = 0.01))
+(nrc_email = cbind(nrc_email_ham,nrc_email_spam))
+
+```
+
+#### Bing
+
+Ahora, en una clasificación binaria, se puede asumir que tanto para mensajes *Ham* como *Spam* se tiende a recibir mensajes más negativos que positivos.
+
+```{r}
+mensajes_email %>% count(Class,bing) %>% group_by(Class) %>% 
+  mutate(frecuencia = percent( n /sum(n),accuracy = 0.01))
+```
+
+```{r}
+rm(nrc_sms_ham,nrc_sms_spam,nrc_email_ham,nrc_email_spam,nrc_email,nrc_sms,NRC,BING)
+```
+
+
+## **Modelado de temas**
+
+El modelado de temas es un método de clasificación no supervisada de este tipo de documentos, similar a la agrupación de datos numéricos, que encuentra grupos naturales de elementos incluso cuando no estamos seguros de lo que buscamos.
+
+La asignación de Dirichlet latente (LDA) es un método especialmente popular para ajustar un modelo temático. Trata cada documento como una mezcla de temas, y cada tema como una mezcla de palabras. Esto permite que los documentos se "superpongan" en términos de contenido, en lugar de estar separados en grupos discretos, de una manera que refleja el uso típico del lenguaje natural.
+
+Dicho esto, se separará la base de datos no tokenizada en 4 bases de datos, esto con el fin de visualizar los temas referente a correos tanto de *Ham* como *Spam* y mensajes SMS tanto de *Ham* como *Spam*.
+
+```{r}
+tm_email_ham  <-  mensajes_no_token %>% dplyr::filter(Type == "E-mail" & Class =="Ham") %>% pull(Text)
+tm_email_spam  <-  mensajes_no_token %>% dplyr::filter(Type == "E-mail" & Class =="Spam") %>% pull(Text)
+tm_sms_ham  <-  mensajes_no_token %>% dplyr::filter(Type == "SMS" & Class =="Ham")%>% pull(Text)
+tm_sms_spam <-  mensajes_no_token %>% dplyr::filter(Type == "SMS" & Class =="Spam")%>% pull(Text)
+```
+
+### SMS
+
+#### Ham
+
+```{r}
+corpus_sms_ham = VCorpus(VectorSource(tm_sms_ham)) %>% 
+  tm_map(content_transformer(tolower)) %>% 
+  tm_map(removeNumbers) %>% 
+  tm_map(removePunctuation) %>% 
+  tm_map(stemDocument) %>% 
+  tm_map(stripWhitespace)
+dtm_sms_ham= DocumentTermMatrix(corpus_sms_ham)
+```
+
+Son 4,493 líneas a analizar.
+
+```{r message=FALSE, warning=FALSE}
+indexkp_sms_ham <- rowSums(as.matrix(dtm_sms_ham)) > 0
+sum(indexkp_sms_ham)
+```
+
+
+```{r}
+dtm_sms_ham<- dtm_sms_ham[indexkp_sms_ham, ]
+tm_sms_ham <-tm_sms_ham[indexkp_sms_ham]
+```
+
+A continuación, se despliegan los 4 temas identificados en mensajes SMS clasificados como *Ham*.
+
+```{r}
+lda_sms_ham <- LDA(dtm_sms_ham, k = 4, control = list(seed = 1234))
+terms(lda_sms_ham, 10)
+```
+
+```{r}
+rm(corpus_sms_ham,dtm_sms_ham,indexkp_sms_ham,lda_sms_ham,tm_sms_ham)
+```
+
+#### Spam
+
+```{r}
+corpus_sms_spam = VCorpus(VectorSource(tm_sms_spam)) %>% 
+  tm_map(content_transformer(tolower)) %>% 
+  tm_map(removeNumbers) %>% 
+  tm_map(removePunctuation)%>% 
+  tm_map(stemDocument) %>% 
+  tm_map(stripWhitespace)
+
+dtm_sms_spam= DocumentTermMatrix(corpus_sms_spam)
+```
+
+Son 642 líneas a analizar.
+
+```{r}
+indexkp_sms_spam <- rowSums(as.matrix(dtm_sms_spam)) > 0
+sum(indexkp_sms_spam)
+```
+
+```{r}
+dtm_sms_spam<- dtm_sms_spam[indexkp_sms_spam, ]
+tm_sms_spam <-tm_sms_spam[indexkp_sms_spam]
+```
+
+A continuación, se despliegan los 4 temas identificados en mensajes SMS clasificados como *Spam*.
+
+```{r}
+lda_sms_spam <- LDA(dtm_sms_spam, k = 4, control = list(seed = 1234))
+terms(lda_sms_spam, 10)
+```
+
+```{r}
+rm(corpus_sms_spam,dtm_sms_spam,indexkp_sms_spam,lda_sms_spam,tm_sms_spam)
+```
+
+
+### E-mail
+
+#### Ham
+
+```{r}
+corpus_email_ham = VCorpus(VectorSource(tm_email_ham)) %>% 
+  tm_map(content_transformer(tolower)) %>% 
+  tm_map(removeNumbers) %>% 
+  tm_map(removePunctuation) %>% 
+  tm_map(stemDocument) %>% 
+  tm_map(stripWhitespace)
+
+dtm_email_ham= DocumentTermMatrix(corpus_email_ham)
+```
+
+Son 5,829 líneas a analizar.
+
+```{r}
+indexkp_email_ham <- rowSums(as.matrix(dtm_email_ham)) > 0
+sum(indexkp_email_ham)
+```
+
+```{r}
+dtm_email_ham<- dtm_email_ham[indexkp_email_ham, ]
+tm_email_ham <-tm_email_ham[indexkp_email_ham]
+```
+
+A continuación, se despliegan los 4 temas identificados en correos clasificados como *Ham*.
+
+```{r}
+lda_email_ham <- LDA(dtm_email_ham, k = 4, control = list(seed = 1234))
+terms(lda_email_ham, 10)
+```
+
+```{r}
+rm(corpus_email_ham,dtm_email_ham,indexkp_email_ham,lda_email_ham,tm_email_ham)
+```
+
+#### Spam
+
+```{r}
+corpus_email_spam = VCorpus(VectorSource(tm_email_spam)) %>% 
+  tm_map(content_transformer(tolower)) %>% 
+  tm_map(removeNumbers) %>% 
+  tm_map(removePunctuation) %>% 
+  tm_map(stemDocument) %>% 
+  tm_map(stripWhitespace)
+
+dtm_email_spam= DocumentTermMatrix(corpus_email_spam)
+```
+
+Son 4,331 líneas a analizar.
+
+```{r}
+indexkp_email_spam <- rowSums(as.matrix(dtm_email_spam)) > 0
+sum(indexkp_email_spam)
+```
+
+```{r}
+dtm_email_spam<- dtm_email_spam[indexkp_email_spam, ]
+tm_email_spam <-tm_email_spam[indexkp_email_spam]
+```
+
+A continuación, se despliegan los 4 temas identificados en correos clasificados como *Spam*.
+
+```{r}
+lda_email_spam <- LDA(dtm_email_spam, k = 4, control = list(seed = 1234))
+terms(lda_email_spam, 10)
+```
+
+
+```{r}
+rm(corpus_email_spam,dtm_email_spam,indexkp_email_spam,
+   lda_email_spam,tm_sms_ham,tm_sms_spam,tm_email_spam)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+write.csv(mensajes_no_token,"db_NoEstructurado_limpio.csv")
+```
+
+```{r}
+rm(mensajes,mensajes_email,mensajes_sms,para_filtrar,mensajes_no_token)
+```
+
+## **Bibliografía**
+
+Cveticanin, N. (2022). *What’s On the Other Side of Your Inbox - 20 SPAM Statistics for 2022*. Dataprot. https://dataprot.net/statistics/spam-statistics/
+
+Gandhi, R. (2018). *Support Vector Machine — Introduction to Machine Learning Algorithms*. Towards Data Science. https://towardsdatascience.com/support-vector-machine-introduction-to-machine-learning-algorithms-934a444fca47
+
+GeeksforGeeks. (2022). *Naive Bayes Classifiers*. GeeksforGeeks. https://www.geeksforgeeks.org/naive-bayes-classifiers/
+
+kaggle. (2022). *SMS Spam Collection Dataset*. kaggle. https://www.kaggle.com/datasets/uciml/sms-spam-collection-dataset
+
+kaggle. (2022). *Fraud Email Dataset*. kaggle. https://www.kaggle.com/datasets/llabhishekll/fraud-email-dataset
+
+Lee, K. (2020). *The Evolution of Trees-Based Classification Models*. Towards Data Science. https://towardsdatascience.com/the-evolution-of-trees-based-classification-models-cb40912c8b35#:~:text=Tree%2Dbased%20classification%20models%20are,be%20used%20to%20make%20predictions.
+
+Robinson, D. & Silge, J. (2017). *Text Mining with R: A Tidy Approach*. EE.UU: O'Reilly.
+
+Yiu, T. (2019). *Understanding Random Forest*. Towards Data Science. https://towardsdatascience.com/understanding-random-forest-58381e0602d2
+
+Zhao, Y. (2013). *Generalized Linear Model*. ScienceDirect. https://www.sciencedirect.com/topics/mathematics/generalized-linear-model
+

@@ -1,0 +1,645 @@
+---
+title: "E2. Preparación y Modelado de los datos"
+date: "12 de Mayo del 2022"
+output: 
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 5
+    toc_float:
+      smooth_scroll: true
+      collapsed: true
+editor_options: 
+  chunk_output_type: inline  
+---
+
+- Equipo 3
+  - Ximena Martínez A00829670
+  - Chantal Aimeé Simó A00827554
+  - Carolina Velarde A01720509
+  - Kízari Hernández A00828451
+    
+    
+## Fraud Detection System
+### Sistema de detección de fraude y puntuación de riesgo  
+- Insights de la industria financiera
+    - El 47% de las compañías informaron haber experimentado fraude en los últimos dos años (Segundo nivel más alto reportado en 20 años).  <b>*Encuesta Mundial sobre Fraude y Delitos Económicos de PwC, 2020*</b> 
+    - Las entidades financieras que sufrieron fraude reportaron pérdidas de más de US$ 50 millones.  <b>*Encuesta Mundial sobre Fraude y Delitos Económicos de PwC, 2020*</b>
+    - Desde el 2021 el fraude financiero ha incrementado 52% en México.  <b>*Forbes México, 2022*</b> 
+    
+    
+Para la parte de datos estructurados, aplicando técnicas de aprendizaje automático con modelos supervisados, nosotras proponemos un sistema de detección de fraude en donde se examinarán todos los datos pertinentes relativos a una transacción y se asignara una puntuación de riesgo a la misma. En base a la puntuación de riesgo, el sistema recomendará permitir la transacción, bloquearla o solicitar una autenticación avanzada antes de permitirla. 
+    
+    
+#### Valor agregado de nuestra propuesta
+**Personalización**:
+    Analiza  la actividad "normal" del cliente, por lo que cuando detecta una anomalía, puede bloquear o marcar automáticamente un pago para que lo revise un analista ante la situación de fraude.
+    
+    
+**Precisión**:
+    El ML aprende de patrones de comportamiento normal. Son muy rápidos para adaptarse a los cambios en ese comportamiento normal y pueden identificar rápidamente patrones de transacciones fraudulentas.
+    
+    
+**Eficiencia**:
+    El ML hace todo el trabajo sucio del análisis de datos en una fracción del tiempo que les tomaría incluso a 100 analistas de fraude. Esto ayuda al ahorro de gastos en  revisiones manuales y perdidas de dinero en fraude.
+    
+    
+**Confianza**:
+    Colabora en el desafío de equilibrar los requisitos de cumplimiento, con la necesidad de proteger a los clientes contra las amenazas del fraude, sin comprometer la experiencia general del cliente.
+    
+    
+### Limpieza de los datos 
+Limpieza general de las tres bases de datos: *Demographic Dataset*, *Transaction History Dataset* y *Shopping Devices*.
+    
+    
+#### **1. Demographic Dataset**
+La base de datos "Demographic Data" contiene datos demográficos como son el número de tarjeta de crédito del cliente, el comerciante, la categoría del comerciante, el amount de la transacción, los nombres del cliente, el género, la calle, cuidad, estado y código postal en donde el cliente realizó la transacción, la latitud, longitud y la población de la ciudad, en qué trabaja el cliente, su fecha de nacimiento, también tenemos el número de la transacción, la fecha y horario en el que se realizó la transacción y por último tenemos si es o no fraudulenta la transacción. 
+
+```{r include=FALSE}
+# Librerias
+pacman::p_load("readr","openxlsx","corrplot","gridExtra","tidyverse","openintro","ISLR","caTools",'Metrics','car','ggplot2','e1071','rpart','rpart.plot','randomForest','caTools','DataExplorer','skimr','dplyr','finalfit','forcats','tidyr','magrittr','openxlsx', 'xlsx', 'sf', 'geosphere', 'dbscan', 'ggmap', 'ROSE', 'writexl')
+```
+
+```{r}
+# Train y Test 
+test <- read_csv('fraudTest.csv')
+train <- read_csv('fraudTrain.csv')
+```
+
+Antes de unir el 'Train' y 'Test' para nuestro análisis, verificamos que los tipos de datos en ambas bases sean iguales para poder hacer la unión. 
+```{r}
+# Verificar que los tipos de datos sean iguales para la unión del 'Test' y 'Train'
+janitor::compare_df_cols_same(train, test)
+janitor::compare_df_cols(train, test)
+```
+
+##### Unión de base de datos  y balanceo
+Ya verificado el tipo de dato podemos continuar con la unión del 'Train' y 'Test' para nuestra limpieza y análisis. También haremos una copia para hacer las queries con la data original y no balanceada
+```{r}
+# Unión de 'Test' y 'Train'
+DemographicData <- bind_rows(train,test)
+DemographicDataQueries <- bind_rows(train,test)
+table(DemographicData$is_fraud)
+```
+    
+    
+Una vez hecha la unión del ‘Train’ y ‘Test’, tenemos que balancear nuestra base de datos ya que de nuestra data (1,852,395) solo 9,961 sufrieron fraude. Para esto decidimos utilizar el Over y Under sample, de esta manera los resultados de nuestros análisis no estarán sesgados. Por último, decidimos únicamente trabajar con 15,000 datos, considerando que era una cantidad adecuada para el análsis y modelado.
+```{r}
+# Balanceo de los datos
+DemographicData <- ROSE::ovun.sample(is_fraud ~ ., data = train, 
+                               method = "both", p=0.5, N=15000, 
+                               seed = 1)$data
+table(DemographicData$is_fraud)
+table(train$is_fraud)
+```
+
+##### Changing data type to Factor
+Primero cambiamos el tipo de dato, se cambió todo lo que era 'Character' a 'Factor' utilizando sapply y lapply, de esta manera se puede cambiar todo en una sola línea de código sin tener que ir columna por columna.
+```{r}
+# Cambiar el tipo de dato 'character' a 'factor'
+DemographicData[sapply(DemographicData, is.character)] <- lapply(DemographicData[sapply(DemographicData, is.character)], as.factor)
+#skim(DemographicData)
+```
+
+##### Eliminating variables 
+Después, eliminamos las columnas que no son tan relaventes y no utilizaremos para nuestro análisis.
+```{r}
+# Eliminar columnas que no se van a utilizar
+#colnames(DemographicData)
+DemographicData %<>% select(-"...1", -cc_num, -dob, -trans_num, -unix_time, -merch_lat, -merch_long)
+#colnames(DemographicData)
+```
+
+##### Changing data type to Date Time 
+Ahora, algo muy importante en esta base de datos es la fecha y hora en la que se realizó la transacción. Pero nos enfocaremos más en la hora que en la fecha ya que solo tenemos datos de 2019 y 2020. 
+    
+    
+    
+Para este arreglo, lo que hacemos es cambiar el formato de la columna 'trans_date_trans_time' para que en lugar de que sea '2019-01-01 00:00:18 tengamos una nueva columna de 'Hour' en donde solo tengamos la hora, sin los minutos y segundos ya que no todas las fechas tienen bien el formato de 00:00:00, en algunas está como 1:00:00 y es más difícil trabajar con eso.
+```{r}
+# Arreglo de las fechas
+DemographicData$trans_date_trans_time <- strptime(DemographicData$trans_date_trans_time, format = "%Y-%m-%d %H:%M:%OS")
+
+DemographicData$Hour <- format(DemographicData$trans_date_trans_time, "%H")
+```
+
+Como ya se arregló y se creó una columna nueva para el tiempo, eliminamos la columna original ya que no la estaremos utilizando en el análisis.
+```{r}
+# Eliminar columna de fechas (original) para dejar unicamente la nueva columna agregada 
+DemographicData %<>% select(-trans_date_trans_time)
+```
+
+##### Feature Engineering 
+En esta parte, se decidió crear una nueva columna 'Schedule' en donde, en lugar de horas establecimos rangos para que de la hora 00 hasta las 05 sea Madrugada, de las 06 a las 11 sea Mañana, de las 12 a las 17 sea Tarde y por último, que de las 18 a las 23 sea Noche. 
+```{r}
+# Determinar rangos para nueva columna de horario 
+DemographicData %<>% 
+  mutate(Schedule = fct_collapse(DemographicData$Hour,
+                         Madrugada =  c("00", "01", "02", "03", "04", "05"),
+                         Mañana = c("06", "07", "08", "09", "10", "11"),
+                         Tarde = c("12", "13", "14", "15", "16", "17"),
+                         Noche = c("18", "19", "20", "21", "22", "23")))
+```
+
+Ahora, vamos a arreglar la columna 'Merchant' eliminando la palabra fraud_ ya que en esta columna nos aparece: fraud_Rippin, Kub and Mann y decidimos mejor solo dejar al comerciante sin que se anteponga la palabra fraud.
+```{r}
+# Arreglar la columna de merchant eliminando la palabra fraud_
+DemographicData <- DemographicData %>%
+  mutate(Merchant = str_remove(merchant, "fraud_"))
+DemographicData %<>% select(-merchant)
+```
+
+Por último, lo que estamos haciendo en esta parte es cambiar ligeramente los nombres de las columnas para que empiezen con mayúsculas y nombres cortos.
+```{r}
+# Arreglar los títulos de todas las columnas
+names(DemographicData) = c("Category", "Amount", "First", "Last", "Gender", "Street", "City", "State", "Zip", "Lat", "Long", "City_Population", "Job", "Is_Fraud", "Hour", "Schedule", "Merchant")
+#names(DemographicData)
+```
+
+**Ya con esto podemos ver que todas las variables estan limpias y en su tipo correcto.**
+```{r}
+glimpse(DemographicData)
+```
+
+##### QUERIES
+##### Corrplots
+Para mejor entendimiento de los datos y su comportamientos realizamos varios queries. Comenzamos con la creación de un correlation plot para las variables tipo factor. No realizamos un correlation plot para la numéricas dado a que solo tenemos una variable numérica. 
+    
+    
+Primero, para esta base de datos, convertimos la variable de Is_Fraud a factor y sacamos todas las variables que son factor para únicamente trabajar con ellas en los corrplots.
+```{r}
+# Convertimos a factor la variable Is_Fraud
+DemographicData$Is_Fraud <- as.factor(DemographicData$Is_Fraud)
+# Sacamos todas las varibles tipo factor. 
+data_fact_demo <- DemographicData[,unlist(lapply(DemographicData, is.factor))]
+```
+
+```{r}
+# Corrplot 1
+data_fact1 <- data_fact_demo %>% select(Gender,Schedule, Category, Is_Fraud) 
+model.matrix(~0+., data=data_fact1) %>% 
+   cor(use="pairwise.complete.obs") %>% 
+   ggcorrplot::ggcorrplot(show.diag = F, type="lower", lab=TRUE, lab_size=2)
+```
+
+```{r}
+# Corrplot 2
+data_fact2 <- data_fact_demo %>% select(Is_Fraud, Schedule)
+model.matrix(~0+., data=data_fact2) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot::ggcorrplot(show.diag = F, type="lower", lab=TRUE, lab_size=2)
+```
+Al ver estas tablas de correlación, podemos ver que las variables en general no presentan una correlación significativa entre ellas. En cierta forma esto es bueno ya que nos indica que no hay multicolinealidad. 
+    
+    
+##### Count of levels and it comparison 
+Para nuestra análisis exploratorio realizamos una cuenta comparativa de nuestra base de datos original y de nuestra base de datos filtrada por las personas que sufrieron fraude. 
+
+**Fraud**
+    
+    
+Contamos con 1,842,743 (99%) personas sin fraude y 9,651 (0.52%) que si sufrieron fraude
+```{r}
+prop.table(table(DemographicDataQueries$is_fraud))
+DemographicDataFraud <- DemographicDataQueries %>% filter(is_fraud == 1)
+```
+
+**Gender**
+    
+    
+Para esta variable contamos con 14 niveles donde vemos que de cada una tienen una proporción muy grande de las personas que sufrieron fraude y de las que no. Podemos ver que  general femenino tenemos 1,014,749 pero en realidad 4,899 sufrieron fraude.
+```{r}
+DemographicDataQueries %>% count(gender,sort = TRUE)
+DemographicDataFraud %>% count(gender,sort = TRUE)
+```
+
+**Category**
+    
+    
+Para esta variable contamos con 14 niveles donde vemos que de cada una tienen una proporción grande de las personas que sufrieron fraude y de las que no. 
+```{r}
+DemographicDataQueries %>% count(category, sort = TRUE)
+DemographicDataFraud %>% count(category, sort = TRUE)
+```
+
+**Merchant**
+    
+    
+Para esta variable contamos con 693 niveles donde vemos que de cada una tienen una proporción grande de las personas que sufrieron fraude y de las que no. 
+```{r}
+DemographicDataQueries %>% count(merchant, sort = TRUE)
+DemographicDataFraud %>% count(merchant, sort = TRUE)
+```
+
+```{r}
+write.xlsx(DemographicData, 'DData.xlsx')
+```
+
+**-------------------------------------------------------------------------------------------------**
+    
+    
+#### **2. Shopping Devices Dataset**
+```{r}
+Fraud_Data <- read_csv("Fraud_Data.csv")
+```
+
+Creamos una copia del data frame original y visualizamos su interior. 
+- Dentro de la base de datos contamos con 151,112 datos y 11 columnas.
+- Tenemos 6 variables tipo caracter y 5 de numérico
+```{r}
+Devicedata <- Fraud_Data
+skim(Devicedata)
+```
+
+##### Eliminating variables 
+Luego de tener nuestra primera exploración de la base de datos proseguimos a su limpieza comenzando con la eliminación de variables que no son relevantes. Para esto eliminamos las variables de "user_id, -device_id y -ip_address"
+```{r}
+Devicedata %<>% select(-user_id, -device_id, -ip_address) # Se elimina variables inservibles 
+```
+
+##### Changing data type to Factor 
+El siguiente paso es cambiar el tipo de variable a tu tipo correcto. Estas variables estaban originalmente como carácter y las cambiaremos a factor. 
+```{r}
+# TO FACTOR 
+Devicedata$source <- as.factor(Devicedata$source)
+Devicedata$browser <- as.factor(Devicedata$browser)
+Devicedata$sex <- as.factor(Devicedata$sex)
+Devicedata$is_fraud <- as.factor(Devicedata$is_fraud)
+```
+
+##### Changing data type to Date Time 
+Dentro de esta base de datos contamos con variables de fecha y tiempo por lo que lo transformamos en datetime. Sin embargo, nos percatamos que al cambiarlo a datetime esta también se convierte en variables POSIXlt el cual no no es viable para realizar los queries, visualización y modelado. 
+```{r}
+# TO YMD/HMS
+Devicedata$signup_time <- strptime(Devicedata$signup_time, 
+                                   format = "%Y-%m-%d %H:%M:%OS") # Funciona Tipo POSIXlt
+Devicedata$purchase_time <- strptime(Devicedata$purchase_time, 
+                                     format = "%Y-%m-%d %H:%M:%OS")# Funciona Tipo POSIXlt
+```
+
+```{r}
+glimpse(Devicedata) #Ya con esto contamos con 8 varibles con su tipo correcto. 
+```
+
+##### Limpieza de NAs
+Al cambiar las variables de fecha y tiempo a datetime se crearon varios nulos como podemos ver en el summary. signup_time contiene 29 nulos y purchase_time 11 nulos. 
+```{r}
+summary(Devicedata) 
+```
+
+Dado a que los únicos valores son en las variables de de datetime, decidimos imputar los nulos con la mediana de las fechas. Esto es debido a que la fecha está bien cerca de otras. 
+```{r echo=FALSE}
+print("Cantidad de valores nulos:") 
+sum(is.na(Devicedata))
+```
+
+```{r}
+# ELIMINATED NAs (REPLACE IT WITH THE MEDIAN)
+Devicedata$signup_time[which(is.na(Devicedata$signup_time))] = "2015-04-19 05:02:58"
+Devicedata$purchase_time[which(is.na(Devicedata$purchase_time))] = "2015-06-18 14:08:26"
+```
+
+```{r echo=FALSE}
+print("Cantidad de valores nulos:") 
+sum(is.na(Devicedata))
+```
+
+##### Feature Engineering 
+Por el momento ya tenemos nuestro tipo de variables correctas por lo que ahora procedemos a la creación de nuevas variables nuevas que nos brinden mayor información de valor. 
+
+Dado a que las nuestras variables de fecha son tipo POSIXlt el cual no nos deja hacer gran cosa. Dado a esto creamos la variable de hora donde de esta variable de fecha sacamos la hora del login y de la compra. Elegimos la hora debido a que la fecha no nos sirve de mucho ya que todo pasa en el mismo año 2015 por lo que consideramos relevante descubrir cuales son las horas pico de transacción y compra. 
+```{r}
+Devicedata$HourST <- as.factor(format(Devicedata$signup_time, "%H"))
+Devicedata$HourPT <- as.factor(format(Devicedata$purchase_time, "%H"))
+```
+
+Ya que tenemos las horas creamos una variable nueva donde agrupamos los factores de horas que creamos anteriormente. Con esto agrupamos por horarios del día. Aqui agrupamos por escala de 6 horas donde de 12am a 5am es madrugada, de 6am a 11am es mañana, de 12pm a 5pm es tarde y de 6 a 11 es noche. 
+```{r}
+#NUEVA COLUMNA DE HORARIOS 
+Devicedata %<>% 
+  mutate(schedule = fct_collapse(Devicedata$HourPT,
+                         Madrugada =  c("00", "01", "02", "03", "04", "05"),
+                         Mañana = c("06", "07", "08", "09", "10", "11"),
+                         Tarde = c("12", "13", "14", "15", "16", "17"),
+                         Noche = c("18", "19", "20", "21", "22", "23")))
+                         
+Devicedata$schedule <- as.factor(Devicedata$schedule)
+table(Devicedata$schedule)
+```
+
+**Ya con esto podemos ver que todas las variables estan limpias y en su tipo correcto.**
+```{r}
+glimpse(Devicedata)
+```
+
+##### QUERIES
+##### Corrplots
+Para mejor entendimiento de los datos y su comportamientos realizamos varios queries. Comenzamos con la creación de un correlation plot para las variables tipo factor. No realizamos un correlation plot para la numéricas dado a que solo tenemos una variable numérica. 
+```{r}
+# Sacamos todas las varibles tipo factor. 
+data_fact <- Devicedata[,unlist(lapply(Devicedata, is.factor))]
+```
+
+```{r}
+# Corrplot 1
+data_fact1 <- data_fact %>% select(source,browser,sex,is_fraud,schedule) 
+model.matrix(~0+., data=data_fact1) %>% 
+   cor(use="pairwise.complete.obs") %>% 
+   ggcorrplot::ggcorrplot(show.diag = F, type="lower", lab=TRUE, lab_size=2)
+```
+
+```{r}
+# Corrplot 2
+data_fact2 <- data_fact %>% select(is_fraud,HourPT)
+model.matrix(~0+., data=data_fact2) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot::ggcorrplot(show.diag = F, type="lower", lab=TRUE, lab_size=2)
+```
+
+Al ver estas tablas de correlación, podemos ver que las variables en general no presentan una correlación significativa entre ellas. En cierta forma esto es bueno ya que nos indica que no hay multicolinealidad. 
+
+##### Count of levels and it comparison 
+Para nuestra análisis exploratorio realizamos una cuenta comparativa de nuestra base de datos original y de nuestra base de datos filtrada por las personas que sufrieron fraude. 
+
+**Fraud**
+    
+    
+Contamos con 136,961(90%) personas sin fraude y 14,151 (10%) que si sufrieron fraude 
+```{r}
+prop.table(table(Devicedata$is_fraud))
+DevicedataFraud <- Devicedata %>% filter(is_fraud == 1)
+```
+
+**Browser**
+    
+    
+Para esta variable contamos con 5 niveles donde vemos que de cada una tienen una proporción del 10% de las personas que sufrieron fraude y de las que no. 
+```{r}
+Devicedata %>% count(browser,sort = TRUE)
+DevicedataFraud %>% count(browser,sort = TRUE)
+```
+
+**Source**
+    
+    
+Para esta variable contamos con 3 niveles donde vemos que de cada una tienen una proporción del 9% de las personas que sufrieron fraude y de las que no. 
+```{r}
+Devicedata %>% count(source,sort = TRUE)
+DevicedataFraud %>% count(source,sort = TRUE)
+```
+
+**Schedule**
+    
+    
+Para esta variable contamos con 4 niveles donde vemos que de cada una tienen una proporción del 10% de las personas que sufrieron fraude y de las que no. 
+```{r}
+Devicedata %>% count(schedule, sort = TRUE)
+DevicedataFraud %>% count(schedule, sort = TRUE)
+```
+
+**Horas de signin**
+    
+    
+Al hacer el count de las top 5 horas de mayor compras podmeos ver que en general (de toda base de datos) es 5pm, 8am, 2pm, 6pm and 2pm mientras que al filtrar por fraude las horas cambian siendo estas 9am 5pm, 7pm, 10am and 3am. 
+```{r}
+Devicedata %>% count(HourST, sort = TRUE)%>% head(5)
+#More fraud occurs at (5pm, 8am, 2pm, 6pm and 2pm)
+
+DevicedataFraud %>% count(HourST, sort = TRUE) %>% head(5) 
+#More fraud occurs at (9am 5pm, 7pm, 10am and 3am)
+```
+
+**Horas de purchase**
+    
+    
+Al hacer el count de las top 5 horas de mayor compras podmeos ver que en general (de toda base de datos) es 5pm, 3am, 9am, 12pm and 8am mientras que al filtrar por fraude las horas cambian siendo estas 5pm, 9am, 8am, 3pm and 4pm. 
+```{r}
+Devicedata %>% count(HourPT, sort = TRUE)%>% head(5)
+#More fraud occurs at (5pm, 3am, 9am, 12pm and 8am)
+
+DevicedataFraud %>% count(HourPT, sort = TRUE) %>% head(5) 
+#More fraud occurs at (5pm, 9am, 8am, 3pm and 4pm)
+```
+
+**Sexo**
+    
+    
+Dentro de nuestra base de datos contamos con 62,819 femenino y 88,293 masculino y al filtrarlo por fraude tenemos 5,717 femenino y 8,434 masculino. esto nos deja dicho que los hombre caen mayormente en fraude
+```{r}
+Devicedata %>% count(sex)
+DevicedataFraud %>% count(sex) 
+```
+
+##### Visualización
+
+**Comparison Age Histogram**
+    
+    
+En la grafica podemos ver que las edades que mas predominan son entre los 20-40. Esto para la base de datos general y para la filtrada por fraude
+```{r echo=FALSE}
+Devicedata %>% 
+  ggplot(aes(x = age, color=sex)) + 
+  geom_histogram(fill="white") + 
+  facet_wrap(~is_fraud, ncol = 3) +
+  labs (title = "Age Histogram") +
+  hrbrthemes::theme_ipsum() 
+```
+
+**Comparison Purchase Value Histogram**
+    
+    
+En la grafica podemos ver que en la base de datos las cantidades que mas gastan son entre los 20 a 60 (pico de $35) dolares. 
+```{r echo=FALSE}
+Devicedata %>% 
+  ggplot(aes(x = purchase_value, color=sex)) + 
+  geom_histogram(fill="white") + 
+  facet_wrap(~is_fraud, ncol = 3) +
+  labs (title = "Who purhase more?") +
+  hrbrthemes::theme_ipsum() 
+```
+
+**Schedule x purchase value Boxplot**
+```{r echo=FALSE}
+Devicedata %>%
+  ggplot(aes(x = schedule, y = purchase_value, color = is_fraud)) + 
+  geom_boxplot() +
+  facet_wrap(~is_fraud, ncol = 3) +
+  labs (title = "Boxplot schedule x purchase value") +
+  hrbrthemes::theme_ipsum() 
+```
+
+**Source x purchase value Boxplot**
+```{r}
+Devicedata %>%
+  ggplot(aes(x = source, y = purchase_value, color = is_fraud)) + 
+  geom_boxplot() +
+  facet_wrap(~is_fraud, ncol = 3) +
+  labs (title = "Boxplot source x purchase value") +
+  hrbrthemes::theme_ipsum() 
+```
+
+**Browser x purchase value Boxplot**
+```{r}
+Devicedata %>%
+  ggplot(aes(x = browser, y = purchase_value, color = is_fraud)) + 
+  geom_boxplot(color = "darkseagreen4") +
+  facet_wrap(~is_fraud, ncol = 3) +
+  labs (title = "Boxplot browser x purchase value") +
+  hrbrthemes::theme_ipsum() 
+```
+
+
+**-------------------------------------------------------------------------------------------------**
+    
+    
+#### **3. Transaction Dataset**
+```{r}
+TransactionData <- read_csv("PS_20174392719_1491204439457_log.csv")
+```
+
+Creamos una copia del data frame original y visualizamos su interior. 
+```{r}
+HistoricalData <- TransactionData
+glimpse(HistoricalData)
+```
+
+##### Eliminating variables 
+Luego de tener nuestra primera exploración de la base de datos proseguimos a su limpieza comenzando con la eliminación de variables que no son relevantes. Para esto eliminamos las variables de "-step, -nameOrig, -nameDest, -isFlaggedFraud"
+```{r}
+HistoricalData %<>% select(-step, -nameOrig, -nameDest, -isFlaggedFraud)
+```
+
+##### Changing data type to Factor
+El siguiente paso es cambiar el tipo de variable a tu tipo correcto. Estas variables estaban originalmente como carácter y las cambiaremos a factor. 
+```{r}
+#TO FACTOR
+HistoricalData$type <- as.factor(HistoricalData$type)
+HistoricalData$isFraud <- as.factor(HistoricalData$isFraud)
+```
+
+##### Rounding up numeric varibles
+Redondeamos las variables numéricas. Esta función redondea 12,5 a 13 (suponiendo que los dígitos = 0). Se realiza esta función debido a que se presentó una pequeña mejor al realizar los modelos. 
+```{r}
+# ROUNDING 
+HistoricalData$amount <- janitor::round_half_up(HistoricalData$amount)
+HistoricalData$oldbalanceOrg <- janitor::round_half_up(HistoricalData$oldbalanceOrg)
+HistoricalData$newbalanceOrig <- janitor::round_half_up(HistoricalData$newbalanceOrig)
+HistoricalData$oldbalanceDest <- janitor::round_half_up(HistoricalData$oldbalanceDest)
+HistoricalData$newbalanceDest <- janitor::round_half_up(HistoricalData$newbalanceDest)
+```
+
+##### Feature Engineering
+Notamos que en nuestra base de datos las variables numeicas de transferencias estan muy relacionadas entre si, llegado a depender una de la otra. Para mayor explicaciooo4ón utilizamos nombre: Estan las cuentas de origen y estan las cuentas de destino. Cada cuenta tiene su balance viejo y su balance luego de la transferencia. Esta funciona de la siguiente forma: 
+
+- oldbalanceOrg tenia $180 
+- newbalanceOrig ahora tiene $0 (porque hizo la tranferencia de 180 por lo que su balance ahora esta en 0)
+- oldbalanceDest tenia $5
+- newbalanceDest ahora tiene $185 (porque recibio la transferncia a su cuenta y se sumo lo que tenia)
+
+Dado a este suceso nosotras creamos estas dos variables nuevas donde restamos (newbalanceDest - oldbalanceDest) donde buscamos ver si la cuenta que recibio tuvo un incremento Positivo o Negativo. Igualmente hacemos lo mismo pero ahora restando (newbalanceDest - newbalanceOrig) ya que consideramos que la cuenta de origien debe ser menor que la de destino para que sea una transaccion viable. 
+```{r}
+# Creamos la variable de resta 
+HistoricalData %<>% mutate(increment1 = newbalanceDest - oldbalanceDest, 
+                           increment2 = newbalanceDest - newbalanceOrig)
+```
+
+```{r}
+#variable de resta la volvemos factor
+HistoricalData %<>% mutate(IncrementNewOld = as.factor(ifelse(increment1 > 0,"Positivo","Negativo")),
+                            IncrementoNew = as.factor(ifelse(increment2 > 0,"Positivo","Negativo")),
+                            ) %>% select(-increment1,-increment2)
+```
+
+##### One Hot Encoding 
+La variable de "type" contiene 5 niveles, pero al filtar por personas que tuvieron fraude solo salian dos nivele que es cashout y transfer. Dado a esto realizamos un One Hot Encoding donde creamos variables dummys (0 y 1)los niveles de Cash_out y Transfer. 
+```{r}
+HistoricalData %<>% mutate(Cash_out = as.factor(ifelse(type == "CASH_OUT","1","0")),
+                            Transfer = as.factor(ifelse(type == "TRANSFER","1","0")))
+```
+
+**Ya con esto podemos ver que todas las variables estan limpias y en su tipo correcto.**
+```{r echo=FALSE}
+summary(HistoricalData) # CHECKING NAs OR NULLS
+```
+
+
+##### QUERIES 
+##### Corrplots
+Antes de realizar los corrplots estamos haciendo un balanceo de la base de datos ya que al ser mucha la cantidad de datos (6,362,620) necesitamos hacerlo para que puedan correr.
+```{r}
+# Balanceo de los datos 
+Historical_both <- ovun.sample(isFraud ~ ., data = HistoricalData, 
+                               method = "both", p=0.5, N=24000, seed = 1)$data
+table(Historical_both$isFraud)
+```
+
+```{r}
+# FACTOR Corrplot
+# Se usa data both para que la base de datos sea mas pequeña
+data_fact <- Historical_both[,unlist(lapply(Historical_both, is.factor))]
+glimpse(data_fact)
+
+model.matrix(~0+., data=data_fact) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot::ggcorrplot(show.diag = F, type="lower", lab=TRUE, lab_size=2)
+```
+
+##### Count of levels and it comparison 
+Para nuestra análisis exploratorio realizamos una cuenta comparativa de nuestra base de datos original y de nuestra base de datos filtrada por las personas que sufrieron fraude. 
+
+**Fraud**
+    
+    
+Contamos con 6,354,407(99%) personas sin fraude y 8,213 (1%) que si sufrieron fraude. Esto nos inidca que la base de datos esta muy desbalanceada. (El balanceo de los datos se hara antes de la modelacion de datos)
+```{r}
+prop.table(table(HistoricalData$isFraud))
+HistoricalFraud <- HistoricalData %>% filter(isFraud == 1)
+```
+
+**Type**
+    
+    
+Analizando a quienes sufrieron fraude por el tipo de pago, podemos ver que a pesar de tener 5 niveles/categorías, no en todas se presentan casos de fraude. En este caso vemos que únicamente se presenta fraude cuando es 'CASH_OUT' y 'PAYMENT'.
+```{r}
+HistoricalFraud %>%  count(type, sort = TRUE) #CASH_OUT & TRANSFER
+HistoricalData %>% count(type, sort = TRUE) #THERE ARE 5 TYPE OF TRANSACCION BUT ONLY 2 ARE FRAUDOLENT
+```
+
+**Cash-out**
+    
+    
+Para la parte de Cash_out, vemos quienes si sufrieron fraude. En general, tenemos un total de 4,125,120 (que si utilizaron el método de cash_out) y 2,237,500 (que no utilizaron el método de cash_out), pero de estos solo 4,116 si sufrieron fraude mientras que el 4,097 no.
+```{r}
+HistoricalFraud %>%  count(Cash_out, sort = TRUE) #Yes=4116 // No=4097
+HistoricalData %>% count(Cash_out, sort = TRUE) #Yes=4,125,120 // No=2,237,500 
+```
+
+**Transfer**
+    
+    
+Pasando a la parte de transfer, vemos quienes si sufrieron fraude. En general, tenemos un total de 5,829,711 (que si utilizaron el método de cash_out) y 532,909 (que no utilizaron el método de cash_out), pero de estos solo 4,116 si sufrieron fraude mientras que el 4,097 no.
+```{r}
+HistoricalFraud %>%  count(Transfer, sort = TRUE) #Yes=4116 // No=4097
+HistoricalData %>% count(Transfer, sort = TRUE) #Yes=5,829,711 // No=532,909
+```
+
+**Increment**
+    
+    
+newbalanceDest - oldbalanceDest
+```{r}
+prop.table(table(HistoricalData$IncrementNewOld)) # Negativo 56% // Positivo 44%
+prop.table(table(HistoricalFraud$IncrementNewOld))# Negativo 50% // Positivo 50%
+```
+
+**Increment**
+    
+    
+newbalanceDest - newbalanceOrig
+```{r}
+prop.table(table(HistoricalData$IncrementoNew)) # Negativo 51% // Positivo 49%
+prop.table(table(HistoricalFraud$IncrementoNew))# Negativo 50% // Positivo 50%
+```
+
+
+

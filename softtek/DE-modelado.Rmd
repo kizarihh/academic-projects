@@ -1,0 +1,1013 @@
+---
+title: "E2. Preparación y Modelado de los datos"
+date: "12 de Mayo del 2022"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float:
+      smooth_scroll: true
+      collapsed: true
+editor_options: 
+  chunk_output_type: inline   
+---
+
+- Equipo 3
+  - Ximena Martínez A00829670
+  - Chantal Aimeé Simó A00827554
+  - Carolina Velarde A01720509
+  - Kízari Hernández A00828451
+    
+    
+## Fraud Detection System - Modelado de las bases de datos (Clasificación)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r include=FALSE}
+pacman::p_load('magrittr','caTools','caret','e1071','rpart','rpart.plot','randomForest',
+'class','ROSE','pROC','ROCR','neuralnet', 'readxl', 'dplyr', 'tidyr', 'kableExtra', 'ggplot2', 'htmlTable', 'paletteer', 'readxl', 'gt')
+```
+
+### **Demographic Dataset**
+
+**Preprocesamiento de los datos**
+    
+    
+Para que los modelos puedan correr adecuadamente, necesitamos eliminar varibales con muchos niveles y también variables innecesarias.
+```{r}
+# Importar los datos
+DData <- read_excel("DData.xlsx")
+```
+
+```{r}
+DData  %<>% select( -"...1", -First,-Last,-Street,-City, -State, -Job, -Merchant)
+```
+
+
+```{r}
+# Convertir a factor lo que esté como character
+#str(DData)
+DData[sapply(DData, is.character)] <- lapply(DData[sapply(DData, is.character)], as.factor)
+DData$Is_Fraud <- as.factor(DData$Is_Fraud)
+```
+
+**Splitting Train/Test:**
+    
+    
+Antes de comenzar con los modelos, necesitamos hacer el split de la base de datos en train y test 
+```{r}
+set.seed(123)
+split = sample.split(DData$Is_Fraud, SplitRatio = 0.70)
+train_set = subset(DData, split == TRUE)
+test_set = subset(DData, split == FALSE)
+rm(split)
+#colnames(train_set)
+```
+
+### Modelos de clasificación
+Ya con nuestros datos divididos comenzamos a realizar el modelado. Dentro de nuestra investigación encontramos cuales son los principales modelos que se utilizan para la detección de fraude. De estos realizamos 8 modelos. 
+
+#### M1. Regresión Logística
+**Creación del modelo**
+```{r}
+classifier = glm(formula = Is_Fraud ~ Category + Amount + Gender + Zip + Lat + Long + City_Population + Schedule,
+                 family = binomial,
+                 data = train_set) #%>% MASS::stepAIC(trace = T)
+summary(classifier)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.8353
+- Sensitivity: 0.9360 
+- Specificity: 0.7335
+```{r}
+prob_pred = predict(classifier, newdata = test_set)
+y_pred = ifelse(prob_pred > 0.5, 1, 0)
+y_pred <- as.factor(y_pred)
+confusionMatrix(data = y_pred, reference = test_set$Is_Fraud)
+```
+
+**Prueba ROC/AUC**
+
+- AUC: 0.8347
+```{r}
+y_pred <- as.numeric(y_pred)
+rocRL <- roc(test_set$Is_Fraud, y_pred)
+auc(test_set$Is_Fraud, y_pred)# Area AUC:
+plot.roc(rocRL,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+**Multicollinearity & Autocorrelation**
+```{r}
+car::vif(classifier) # multicollinearity is NOT present with results greater than 10
+lmtest::dwtest(classifier) #DW = 0.01 autocorrelation is NOT present 
+```
+
+
+#### M2. Support Vector Machine (SVM)
+**Creación del modelo**
+```{r}
+set.seed(123)
+classifierSVM = svm(formula = Is_Fraud ~ .,
+                 data = train_set,
+                 type = 'C-classification',
+                 kernel = 'linear')
+
+summary(classifierSVM)
+classifierSVM
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.8891
+- Sensitivity: 0.8507 
+- Specificity: 0.9280
+```{r}
+y_predSVM = predict(classifierSVM, newdata = test_set[-8])
+confusionMatrix(data = y_predSVM, reference = test_set$Is_Fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- AUC: 0.8894
+```{r}
+y_predSVM <- as.numeric(y_predSVM)
+rocSVM <- roc(test_set$Is_Fraud, y_predSVM)
+auc(test_set$Is_Fraud, y_predSVM)# Area AUC:
+plot.roc(rocSVM,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+
+#### M3. Kernel
+**Creación del modelo**
+```{r}
+set.seed(123)
+classifierKER = svm(formula = Is_Fraud ~ .,
+                 data = train_set,
+                 type = 'C-classification',
+                 kernel = 'radial')
+
+classifierKER
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.8851
+- Sensitivity: 0.8405 
+- Specificity: 0.9302
+```{r}
+y_predKER = predict(classifierKER, newdata = test_set[-8])
+confusionMatrix(data = y_predKER, reference = test_set$Is_Fraud)
+```
+
+**Prueba ROC/AUC**
+
+- AUC: 0.8854
+```{r}
+y_predKER <- as.numeric(y_predKER)
+rocKER <- roc(test_set$Is_Fraud, y_predKER)
+auc(test_set$Is_Fraud, y_predKER)# Area AUC:
+plot.roc(rocKER,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+
+#### M4. Naïve Bayes
+**Creación del modelo**
+```{r}
+set.seed(123)
+classifierNB = naiveBayes(x = train_set,
+                        y = train_set$Is_Fraud)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.8196
+- Sensitivity: 0.8728 
+- Specificity: 0.7657
+```{r}
+y_predNB = predict(classifierNB, newdata = test_set[-8])
+confusionMatrix(data = y_predNB, reference = test_set$Is_Fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- AUC: 0.8192
+```{r}
+y_predNB <- as.numeric(y_predNB)
+rocNB <- roc(test_set$Is_Fraud, y_predNB)
+auc(test_set$Is_Fraud, y_predNB)# Area AUC:
+plot.roc(rocNB,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+    
+    
+#### M5. Naïve Bayes Glm
+**Creación del modelo**
+```{r}
+classifierNBglm <- arm::bayesglm(formula = Is_Fraud ~ .,
+                                 family = "binomial", 
+                                 data = train_set) %>% MASS::stepAIC(trace = T)
+jtools::summ(classifierNBglm)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.8776
+- Sensitivity: 0.8905 
+- Specificity: 0.8645
+```{r}
+y_predNBglm = predict(classifierNBglm, newdata = test_set[-8])
+y_predNBglm = as.factor(ifelse( y_predNBglm > 0.35, 1, 0))
+confusionMatrix(data = y_predNBglm, reference = test_set$Is_Fraud)
+```
+
+**Prueba ROC/AUC**
+
+- AUC: 0.8775
+```{r message=FALSE, warning=FALSE}
+y_predNBglm <- as.numeric(y_predNBglm)
+rocNBglm <- roc(test_set$Is_Fraud, y_predNBglm)
+auc(test_set$Is_Fraud, y_predNBglm)# Area AUC:
+```
+    
+    
+#### M6. Decision Tree
+**Creación del modelo**
+```{r}
+set.seed(123)
+classifierDT = rpart(formula = Is_Fraud ~ .,
+                   data = train_set)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.9422
+- Sensitivity: 0.9452 
+- Specificity: 0.9392
+```{r}
+y_predDT = predict(classifierDT, newdata = test_set[-8], type = 'class')
+confusionMatrix(data = y_predDT, reference = test_set$Is_Fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- AUC: 0.9422
+```{r}
+y_predDT <- as.numeric(y_predDT)
+rocDT <- roc(test_set$Is_Fraud, y_predDT)
+auc(test_set$Is_Fraud, y_predDT)# Area AUC:
+plot.roc(rocDT,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+    
+    
+#### M7. Random Forest
+**Creación del modelo**
+```{r}
+classifierRF = randomForest(x = train_set[-8],
+                          y = train_set$Is_Fraud,
+                          ntree = 30, importance = T)
+
+classifierRF$importance
+plot(classifierRF)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.9773
+- Sensitivity: 0.9726 
+- Specificity: 0.9821
+```{r}
+y_predRF = predict(classifierRF, newdata = test_set[-8])
+confusionMatrix(data = y_predRF, reference = test_set$Is_Fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- AUC: 0.9422
+```{r}
+y_predDT <- as.numeric(y_predDT)
+rocRF <- roc(test_set$Is_Fraud, y_predDT)
+auc(test_set$Is_Fraud, y_predDT)# Area AUC:
+plot.roc(rocRF,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+    
+    
+#### M8. Gradiente boosting classifier
+**Creación del modelo**
+```{r message=FALSE, warning=FALSE}
+classifierGBC = gbm::gbm(Is_Fraud ~.,
+                data = train_set,
+                distribution = "multinomial",
+                cv.folds = 10,
+                shrinkage = .01,
+                n.minobsinnode = 10,
+                n.trees = 50)       # 60 tress to be built
+
+summary(classifierGBC)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.8704
+- Sensitivity: 0.8071 
+- Specificity: 0.9688
+```{r message=FALSE, warning=FALSE}
+y_predGBC= gbm::predict.gbm(object = classifierGBC,
+                   newdata = test_set[-8],
+                   n.trees = 50,           
+                   type = "response")
+
+class_names = colnames(y_predGBC)[apply(y_predGBC, 1, which.max)]
+result = data.frame(test_set$Is_Fraud, class_names)
+confusionMatrix(test_set$Is_Fraud, as.factor(class_names))
+```
+
+**-------------------------------------------------------------------------------------------------**
+    
+    
+### **Device Dataset**
+**Balanceo de datos**
+    
+    
+Luego de la limpieza pasamos al balanceo de datos. Antes de comenzar este proceso, para esta base de datos eliminamos las variables tipo POSIXlt ya que estas no funcionaran en los modelos. 
+```{r}
+# Previa regulación de datos 
+Devicedata %<>% select(-signup_time,-purchase_time)
+glimpse(Devicedata)
+```
+
+Una vez eliminadas las variables POSIXlt, balanceamos la base de datos. En esta base en particular tenemos que el 90% de las personas no han sufrido fraude y el 10% si. Dado a esto balanceamos con la librería ROSE utilizando un over-sample y un under-sample. 
+```{r}
+table(Devicedata$is_fraud)
+prop.table(table(Devicedata$is_fraud)) #90% No Fraude / 10% Fraude
+```
+
+**Undersampling:** Con esto intentamos reducir las observaciones de la clase mayoritaria (No Fraude 0) para que el conjunto de datos final sea equilibrado. El problema con este metodo es que  se pierde información significativa de la muestra. 
+```{r}
+Devicedata_over <- ovun.sample(is_fraud ~ ., 
+                                data = Devicedata, 
+                                method = "under",
+                                N = 44151, seed = 1)$data
+table(Devicedata_over$is_fraud)
+```
+
+**Both sampling:** Con este metodo estamso aplicando las reglas del undersampling y del oversampling donde clase minoritaria se sobremuestrea con reemplazo y la clase mayoritaria se submuestrea sin reemplazo. 
+```{r}
+Devicedata_both <- ovun.sample(is_fraud ~ ., 
+                               data = Devicedata,
+                               method = "both", p=0.5, 
+                               N=40000, seed = 1)$data
+table(Devicedata_both$is_fraud)
+```
+
+**Splitting Train/Test:** 
+    
+    
+Utilizando el both sampling dividimos nuestra base de datos en entrenamiento y prueba donde tenemos 65% entrenamiento y 35% prueba. Elegimos este split debido a que al probar con varios split (70/30, 80/20, 50/50, 60/40 etc )esta fue la mejor combinación que dio los mejores resultados en las pruebas. 
+```{r}
+set.seed(123)
+split = sample.split(Devicedata_both$is_fraud, SplitRatio = 0.65)
+train_set1 = subset(Devicedata_both, split == TRUE)
+test_set1 = subset(Devicedata_both, split == FALSE)
+```
+
+### Modelos de clasificación
+Ya con nuestros datos divididos comenzamos a realizar el modelado. Dentro de nuestra investigación encontramos cuales son los principales modelos que se utilizan para la detección de fraude. De estos realizamos 8 modelos. 
+ 
+ 
+Igualmente, con la regresión logística aplicando el stepwise estuvimos jugando con las variables para ver cuales son las variables más significativas que puedan ayudar al modelo a mejorar. Sin embargo, a pesar de aplicar estos dos modelos encontramos que al aplicar todas las variables de la base de datos los demás modelos funcionaban mejor. 
+```{r}
+modelo1 = is_fraud ~ source + browser + age + HourST + HourPT
+modelo2 = is_fraud ~ source + browser + sex + age + HourST + HourPT
+modelo3 = is_fraud ~ purchase_value + source + browser + sex + age + HourST + HourPT
+```
+
+#### M1. Regresión Logística
+**Creación del modelo**
+```{r}
+classifier = glm(formula =  is_fraud ~.,
+                 family = binomial,
+                 data = train_set1) %>% MASS::stepAIC(trace = T)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.5245
+- Sensitivity: 0.5459
+- Specificity: 0.5029
+```{r}
+prob_pred = predict(classifier, type = 'response', newdata = test_set1[-6])
+y_pred = ifelse(prob_pred > 0.5, 1, 0)
+y_pred <- as.factor(y_pred)
+confusionMatrix(data = y_pred, reference = test_set1$is_fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.5244
+```{r message=FALSE, warning=FALSE}
+y_pred <- as.numeric(y_pred)
+rocRL <- roc(test_set1$is_fraud, y_pred)
+auc(test_set1$is_fraud, y_pred)# Area AUC:
+plot.roc(rocRL,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+**Multicollinearity & Autocorrelation**
+```{r}
+car::vif(classifier) # multicollinearity is NOT present with results greater than 10
+lmtest::dwtest(classifier) #DW = 0.01 autocorrelation is NOT present 
+```
+
+#### M2. Support Vector Machine (SVM)
+**Creación del modelo**
+```{r}
+classifierSVM = svm(formula = is_fraud ~ .,
+                 data = train_set1,
+                 type = 'C-classification',
+                 kernel = 'linear')
+
+summary(classifierSVM)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.5069	
+- Sensitivity: 0.4499	
+- Specificity: 0.5643	
+```{r}
+y_predSVM = predict(classifierSVM, newdata = test_set1[-6])
+confusionMatrix(data = y_predSVM, reference = test_set1$is_fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.5071
+```{r message=FALSE, warning=FALSE}
+y_predSVM <- as.numeric(y_predSVM)
+rocSVM <- roc(test_set1$is_fraud, y_predSVM)
+auc(test_set1$is_fraud, y_predSVM)# Area AUC:
+plot.roc(rocSVM,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M3. Kernel
+**Creación del modelo**
+```{r}
+classifierKER = svm(formula = is_fraud ~ .,
+                 data = train_set1,
+                 type = 'C-classification',
+                 kernel = 'radial')
+
+classifierKER
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.6138	
+- Sensitivity: 0.7040	
+- Specificity: 0.5228	
+```{r}
+y_predKER = predict(classifierKER, newdata = test_set1[-6])
+confusionMatrix(data = y_predKER, reference = test_set1$is_fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.6134
+```{r message=FALSE, warning=FALSE}
+y_predKER <- as.numeric(y_predKER)
+rocSVMK <- roc(test_set1$is_fraud, y_predKER)
+auc(test_set1$is_fraud, y_predKER)# Area AUC:
+plot.roc(rocSVMK,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M4. Naïve Bayes
+**Creación del modelo**
+```{r}
+classifierNB = naiveBayes(x = train_set1[-6],
+                        y = train_set1$is_fraud)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.518
+- Sensitivity: 0.5358
+- Specificity: 0.5000
+```{r}
+y_predNB = predict(classifierNB, newdata = test_set1[-6])
+confusionMatrix(data = y_predNB, reference = test_set1$is_fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.5179
+```{r message=FALSE, warning=FALSE}
+y_predNB <- as.numeric(y_predNB)
+rocNB <- roc(test_set1$is_fraud, y_predNB)
+auc(test_set1$is_fraud, y_predNB)# Area AUC:
+plot.roc(rocNB,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M5. Naïve Bayes Glm
+**Creación del modelo**
+```{r}
+classifierNBglm <- arm::bayesglm(formula = is_fraud ~. ,
+                                 family = "binomial", 
+                                 data = train_set1) %>% MASS::stepAIC(trace = T)
+jtools::summ(classifierNBglm)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.5058
+- Sensitivity: 0.98834
+- Specificity: 0.01908	
+```{r}
+y_predNBglm = predict(classifierNBglm, newdata = test_set1[-6])
+y_predNBglm = as.factor(ifelse( y_predNBglm > 0.35, 1, 0))
+confusionMatrix(data = y_predNBglm, reference = test_set1$is_fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.5037
+```{r message=FALSE, warning=FALSE}
+y_predNBglm <- as.numeric(y_predNBglm)
+rocNBglm <- roc(test_set1$is_fraud, y_predNBglm)
+auc(test_set1$is_fraud, y_predNBglm)# Area AUC:
+plot.roc(rocNBglm,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M6. Decision Tree
+**Creación del modelo**
+```{r}
+classifierDT = rpart(formula = is_fraud~ .,
+                   data = train_set1)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.6781
+- Sensitivity: 0.6623
+- Specificity: 0.6940
+```{r}
+y_predDT = predict(classifierDT, newdata = test_set1[-6], type = 'class')
+confusionMatrix(data = y_predDT, reference = test_set1$is_fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.6781
+```{r message=FALSE, warning=FALSE}
+y_predDT <- as.numeric(y_predDT)
+rocDT <- roc(test_set1$is_fraud, y_predDT)
+auc(test_set1$is_fraud, y_predDT)# Area AUC:
+plot.roc(rocDT,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M7. Random Forest
+**Creación del modelo**
+```{r}
+set.seed(123)
+classifierRF = randomForest(x = train_set1[-6],
+                          y = train_set1$is_fraud,
+                          ntree = 60, importance = T)
+
+classifierRF$importance
+```
+
+**Choosing the number of trees**
+```{r}
+plot(classifierRF) # Choosing the number of trees (60)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.8676
+- Sensitivity: 0.9065
+- Specificity: 0.8284
+```{r}
+y_predRF = predict(classifierRF, newdata = test_set1[-6])
+confusionMatrix(data = y_predRF, reference = test_set1$is_fraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.8675
+```{r message=FALSE, warning=FALSE}
+y_predRF <- as.numeric(y_predRF)
+rocRF <- roc(test_set1$is_fraud, y_predRF)
+auc(test_set1$is_fraud, y_predRF)# Area AUC:
+plot.roc(rocRF,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M8. Gradiente boosting classifier
+**Creación del modelo**
+```{r}
+#https://www.projectpro.io/recipes/apply-gradient-boosting-for-classification-r 
+classifierGBC = gbm::gbm(is_fraud ~.,
+                data = train_set1,
+                distribution = "multinomial",
+                cv.folds = 10,
+                shrinkage = .01,
+                n.minobsinnode = 10,
+                n.trees = 60)       # 60 tress to be built
+
+summary(classifierGBC)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.514	
+- Sensitivity: 0.5152	
+- Specificity: 0.5126	
+```{r}
+y_predGBC= gbm::predict.gbm(object = classifierGBC,
+                   newdata = test_set1[-6],
+                   n.trees = 60,           
+                   type = "response")
+
+
+class_names = colnames(y_predGBC)[apply(y_predGBC, 1, which.max)]
+result = data.frame(test_set1$is_fraud, class_names)
+confusionMatrix(test_set1$is_fraud, as.factor(class_names))
+```
+
+### **Historical Dataset**
+**Balanceo de datos** 
+```{r}
+table(HistoricalData$isFraud)
+prop.table(table(HistoricalData$isFraud)) #99% No Fraude / 1% Fraude
+```
+
+**Undersampling:** 
+    
+    
+Con esto intentamos reducir las observaciones de la clase mayoritaria (No Fraude 0) para que el conjunto de datos final sea equilibrado. El problema con este metodo es que  se pierde información significativa de la muestra. 
+```{r}
+Historical_over <- ovun.sample(isFraud ~ ., 
+                               data = HistoricalData, 
+                               method = "under",
+                               N = 28213, seed = 1)$data
+table(Historical_over$isFraud)
+```
+
+**Both sampling:** 
+    
+    
+Con este metodo estamso aplicando las reglas del undersampling y del oversampling donde clase minoritaria se sobremuestrea con reemplazo y la clase mayoritaria se submuestrea sin reemplazo. 
+```{r}
+Historical_both <- ovun.sample(isFraud ~ ., 
+                               data = HistoricalData, 
+                               method = "both", p=0.5, 
+                               N=30000, seed = 1)$data
+table(Historical_both$isFraud)
+```
+
+**Splitting Train/Test:** 
+    
+    
+Utilizando el both sampling dividimos nuestra base de datos en entrenamiento y prueba donde tenemos 70% entrenamiento y 30% prueba. Elegimos este split debido a que al probar con varios split (80/20, 50/50, 60/40 etc )esta fue la mejor combinación que dio los mejores resultados en las pruebas. 
+```{r}
+set.seed(123)
+split = sample.split(Historical_both$isFraud, SplitRatio = 0.70)
+train_set2 = subset(Historical_both, split == TRUE)
+test_set2 = subset(Historical_both, split == FALSE)
+```
+
+### Modelos de clasificación
+Al igual que en la base de datos anterior, ya con nuestros datos divididos comenzamos a realizar el modelado. Dentro de nuestra investigación encontramos cuales son los principales modelos que se utilizan para la detección de fraude. De estos realizamos 8 modelos. 
+
+Igualmente, con la regresión logística aplicando el stepwise estuvimos jugando con las variables para ver cuales son las variables más significativas que puedan ayudar al modelo a mejorar. Sin embargo, a pesar de aplicar estos tres modelos encontramos que al aplicar todas las variables de la base de datos los demás modelos funcionaban mejor. 
+```{r}
+modelo1 = isFraud ~ amount + IncrementNewOld + IncrementoNew + Cash_out + Transfer 
+
+modelo2 = isFraud ~ type + oldbalanceOrg + newbalanceOrig + oldbalanceDest + 
+    newbalanceDest + IncrementNewOld + IncrementoNew # MEJOR MODELO SEGUN STEPWISE
+
+modelo3 = isFraud ~ oldbalanceDest + oldbalanceOrg + newbalanceOrig + newbalanceDest +
+  IncrementoNew + IncrementNewOld + Cash_out + Transfer 
+```
+
+#### M1. Regresión Logística
+**Creación del modelo**
+```{r}
+classifierRL = glm(formula = modelo3,
+                 family = binomial,
+                 data = train_set2) %>% MASS::stepAIC(trace = T)
+
+#summary(classifierRL)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.952
+- Sensitivity: 0.9663
+- Specificity: 0.9375
+```{r}
+prob_predRL = predict(classifierRL, type = 'response', newdata = test_set2[-7])
+y_predRL = ifelse(prob_predRL > 0.5, 1, 0)
+y_predRL <- as.factor(y_predRL)
+class(y_predRL)
+confusionMatrix(data = y_predRL, reference = test_set2$isFraud) # Making the Confusion Matrix
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.9519
+```{r message=FALSE, warning=FALSE}
+y_predRL <- as.numeric(y_predRL)
+rocRF <- roc(test_set2$isFraud, y_predRL)
+auc(test_set2$isFraud, y_predRL)# Area AUC:
+plot.roc(rocRF,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+**Multicollinearity & Autocorrelation**
+```{r}
+car::vif(classifierRL) # multicollinearity is NOT present with results greater than 10
+lmtest::dwtest(classifierRL) #DW = 1.16 autocorrelation is present but in not large amount. 
+```
+
+#### M2. Support Vector Machine (SVM)
+**Creación del modelo**
+```{r}
+classifierSVM = svm(formula = isFraud ~ .,
+                 data = train_set2,
+                 type = 'C-classification',
+                 kernel = 'linear') # Intentmos radial, kernel y lineal
+
+summary(classifierSVM)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.9307
+- Sensitivity: 0.9804
+- Specificity: 0.8802
+```{r}
+y_predSVM = predict(classifierSVM, newdata = test_set2[-7])
+confusionMatrix(data = y_predSVM, reference = test_set2$isFraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.9303
+```{r message=FALSE, warning=FALSE}
+y_predSVM <- as.numeric(y_predSVM)
+rocSVM <- roc(test_set2$isFraud, y_predSVM)
+auc(test_set2$isFraud, y_predSVM)# Area AUC:
+plot.roc(rocSVM,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+
+#### M3. Kernel
+**Creación del modelo**
+```{r}
+classifierKER = svm(formula = isFraud ~ .,
+                 data = train_set2,
+                 type = 'C-classification',
+                 kernel = 'radial')
+
+classifierKER
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.9064
+- Sensitivity: 0.9905
+- Specificity: 0.8210
+```{r}
+y_predKER = predict(classifierKER, newdata = test_set2[-7])
+confusionMatrix(data = y_predKER, reference = test_set2$isFraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.9058
+```{r message=FALSE, warning=FALSE}
+y_predKER <- as.numeric(y_predKER)
+rocSVM <- roc(test_set2$isFraud, y_predKER)
+auc(test_set2$isFraud, y_predKER)# Area AUC:
+plot.roc(rocSVM,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M4. Naïve Bayes
+**Creación del modelo**
+```{r}
+classifierNB = naiveBayes(x = train_set2[-7],
+                        y = train_set2$isFraud)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.8049
+- Sensitivity: 0.6709
+- Specificity: 0.9411
+```{r}
+y_predNB = predict(classifierNB, newdata = test_set2[-7])
+confusionMatrix(data = y_predNB, reference = test_set2$isFraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.806
+```{r message=FALSE, warning=FALSE}
+y_predNB <- as.numeric(y_predNB)
+rocNB <- roc(test_set2$isFraud, y_predNB)
+auc(test_set2$isFraud, y_predNB)# Area AUC:
+plot.roc(rocNB,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M5. Naïve Bayes Glm
+**Creación del modelo**
+```{r}
+classifierNBglm <- arm::bayesglm(formula = isFraud ~ .,
+                                 family = "binomial", 
+                                 data = train_set2) %>% MASS::stepAIC(trace = T)
+jtools::summ(classifierNBglm)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.9442
+- Sensitivity: 0.9742
+- Specificity: 0.9138
+```{r}
+y_predNBglm = predict(classifierNBglm, newdata = test_set2[-7])
+y_predNBglm = as.factor(ifelse( y_predNBglm > 0.35, 1, 0))
+confusionMatrix(data = y_predNBglm, reference = test_set2$isFraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.944
+```{r message=FALSE, warning=FALSE}
+y_predNBglm <- as.numeric(y_predNBglm)
+rocNBglm <- roc(test_set2$isFraud, y_predNBglm)
+auc(test_set2$isFraud, y_predNBglm)# Area AUC:
+plot.roc(rocNBglm,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M6. Decision Tree
+```{r}
+classifierDT = rpart(formula = isFraud ~.,
+                   data = train_set2)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.9771
+- Sensitivity: 0.9614
+- Specificity: 0.9931
+```{r}
+y_predDT = predict(classifierDT, newdata = test_set2[-7], type = 'class')
+confusionMatrix(data = y_predDT, reference = test_set2$isFraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.9772
+```{r message=FALSE, warning=FALSE}
+y_predDT <- as.numeric(y_predDT)
+rocDT <- roc(test_set2$isFraud, y_predDT)
+auc(test_set2$isFraud, y_predDT)# Area AUC:
+plot.roc(rocDT,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M7. Random Forest
+**Creación del modelo**
+```{r}
+set.seed(123)
+classifierRF = randomForest(x = train_set2[-7],
+                          y = train_set2$isFraud,
+                          ntree = 30, importance = T)
+
+classifierRF$importance
+```
+
+**Choosing the number of trees**
+```{r}
+# Choosing the number of trees (30)
+plot(classifierRF)
+```
+
+**Analizando resultados**
+
+- Accuracy: 0.9908
+- Sensitivity: 0.9832
+- Specificity: 0.9984
+```{r}
+y_predRF = predict(classifierRF, newdata = test_set2[-7])
+confusionMatrix(data = y_predRF, reference = test_set2$isFraud) 
+```
+
+**Prueba ROC/AUC**
+
+- Curva AUC: 0.9908
+```{r message=FALSE, warning=FALSE}
+y_predRF <- as.numeric(y_predRF)
+rocRF <- roc(test_set2$isFraud, y_predRF)
+auc(test_set2$isFraud, y_predRF)# Area AUC:
+plot.roc(rocRF,print.auc=T,print.thres = "best",
+          col="blue",xlab="1-ESpecificidad",ylab="Sensibilidad")
+```
+
+#### M8. Gradiente boosting classifier
+**Creación del modelo**
+```{r message=FALSE, warning=FALSE}
+#https://www.projectpro.io/recipes/apply-gradient-boosting-for-classification-r 
+classifierGBC = gbm::gbm(isFraud ~.,
+                data = train_set2,
+                distribution = "multinomial",
+                cv.folds = 10,
+                shrinkage = .01,
+                n.minobsinnode = 10,
+                n.trees = 50)       # 60 tress to be built
+
+summary(classifierGBC)
+```
+
+**Analizando resultados**
+- Accuracy: 0.9016
+- Sensitivity: 0.9056
+- Specificity: 0.8976
+```{r}
+y_predGBC= gbm::predict.gbm(object = classifierGBC,
+                   newdata = test_set2[-7],
+                   n.trees = 50,   # Predicting with 50 trees
+                   type = "response")
+
+class_names = colnames(y_predGBC)[apply(y_predGBC, 1, which.max)]
+result = data.frame(test_set2$isFraud, class_names)
+confusionMatrix(test_set2$isFraud, as.factor(class_names))
+```
+
+
+### **Resumen de resultados**
+Una vez teniendo todos los modelos, pasamos los resultados a un excel para después realizar una tabla comparativa de los mismos en las distintas bases de datos.
+```{r}
+resultados <- read_excel("resultadosBD.xlsx")
+```
+
+Convertimos a factor las variables
+```{r}
+resultados[sapply(resultados, is.character)] <- lapply(resultados[sapply(resultados, is.character)], as.factor)
+```
+
+### Resultados
+```{r warning=FALSE}
+resultados %>% 
+  gt(
+    groupname_col = "Modelo",
+    rowname_col = "Dataset"
+  ) %>% 
+  data_color(
+    columns = vars("Accuracy", "Sensitivity", "Specificity"),
+    colors = scales::col_numeric(
+      paletteer::paletteer_d(
+        palette = "ggsci::red_material") %>% as.character(),
+        domain = NULL
+        )
+      ) %>%
+  tab_header(
+    title = md("**Resultados por modelo**"),
+    subtitle = html("Tabla comparativa")
+  )
+```
+### **Modelo final seleccionado**
+Dado a los resultados obtenidos para cada modelo, nosotras definimos como mejor modelo el Random Forest. El random forest presentó los mejores resultados de accuracy, specificity, sensitivity. También al calcular las métricas del Recall, Precision y F1 también obtuvo muy buenos resultados para las tres bases de datos.
+    
+    
+Por otro lado, en segundo lugar obtuvimos como mejor modelo el Decision Tree y en tercer lugar una combinación del SVM lineal y Kernel junto al Logistic Regression
+
+
+
+
+
+
+
+
+
+
+
+

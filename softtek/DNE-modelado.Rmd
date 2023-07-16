@@ -1,0 +1,273 @@
+---
+title: "**Parte 2.** Preparación y modelado de los datos"
+subtitle: "Datos no estructurados"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_depth: 6
+    number_sections: TRUE
+    toc_float:
+      smooth_scroll: TRUE
+      collapsed: FALSE
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, warning=FALSE,message=FALSE,include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE,message=FALSE)
+pacman::p_load(tidyverse,readr,dplyr,tidytext,magrittr,tidyr,scales,textdata,tm,SnowballC)
+pacman::p_load(wordcloud,reshape2,ggpubr,tokenizers,topicmodels,caret,pROC,rpart,rpart.plot)
+```
+
+```{r warning=FALSE,message=FALSE,include=FALSE}
+mensajes <-read.csv("~/Desktop/db_NoEstructurado_limpio.csv") %>%
+  mutate(Type = as.factor(Type),
+         Class = as.factor(Class))
+```
+
+## **Modelos**
+
+### Corpus y Document Term Matrix
+
+Antes de comenzar, *Corpus* es un paquete de procesamiento de texto con soporte completo para texto internacional (Unicode). Incluye funciones para leer datos de archivos JSON delimitados por líneas nuevas, para normalizar y tokenizar el texto, para buscar ocurrencias de términos y para calcular las frecuencias de ocurrencia de términos.
+
+En este caso, se utilizó esta paquetería para remover números, signos de puntuación, caracteres especiales y espacios.
+
+```{r}
+corpus = VCorpus(VectorSource(mensajes$Text)) %>% 
+  tm_map(content_transformer(tolower)) %>% 
+  tm_map(removeNumbers) %>% 
+  tm_map(removePunctuation) %>% 
+  tm_map(removeWords,c("2e","2c","=","nbsp","br","div","äî","3e",
+                               "e9","3d","ôøω","2ci","3a","2ei","td","ä","c","f",
+                               "http","a","son","vous","href","d","href",
+                               "b","g","de","e","m","la","le","je","tu","son",
+                               "avez","vous","sont",".m","cote","ci","ei","p",
+                               "st","cs","da","po","ts","bt","nd","ts",
+                               "st","k","cs","oso","yo","wjhl",".p")) %>% 
+  tm_map(stemDocument) %>% 
+  tm_map(stripWhitespace)
+```
+
+Posteriormente, la matriz de documentos de términos o *Document Term Matrix* es también un método para representar los datos de texto. En este método, los datos de texto se representan en forma de matriz. Las filas de la matriz representan las frases de los datos que hay que analizar y las columnas de la matriz representan la palabra.
+
+```{r}
+dtm = DocumentTermMatrix(corpus)
+dtm = removeSparseTerms(dtm, 0.999)
+dataset = as.data.frame(as.matrix(dtm))
+dataset %<>% mutate(Class = as.factor(mensajes$Class),
+                    Type = as.factor(mensajes$Type)) %>% 
+  select(Class,Type, everything())
+rm(mensajes)
+```
+
+Como se puede evidenciar, la matriz que se generó contiene 15,385 filas y 4,440 columnas.
+
+```{r}
+dim(dtm)
+```
+
+
+### División de datos
+
+A continuación se procedió a dividir la base de datos en dos partes, una parte para desarrollar los modelos predictivos y la otra para evaluar el rendimiento de los modelos. En este caso, se destinó 65% de la base de datos para entrenamiento y el 35% restante para evaluación.
+
+De manera similar, es importante destacar que se estableció una semilla para reproducir siempre los mismos resultados, es decir, para producir la misma muestra una y otra vez.
+
+```{r}
+set.seed(1234)
+rows <- sample(nrow(dataset))
+dataset <- dataset[rows, ]
+```
+
+```{r}
+set.seed(123)
+split = caTools::sample.split(dataset$Class, SplitRatio = 0.65)
+train_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+modelocompleto <- Class ~ .
+rm(dtm,corpus,rows,dataset,split,mensajes_no_token)
+```
+
+#### Generalized Linear Model (GLM)
+
+El modelo lineal generalizado generaliza la regresión lineal permitiendo que el modelo lineal se relacione con la variable de respuesta a través de una función de enlace y permitiendo que la magnitud de la varianza de cada medida sea una función de su valor predicho. Unifica otros modelos estadísticos, como la regresión lineal, la regresión logística y la regresión de Poisson (Zhao, 2013).
+
+En este caso, se utilizó la función `glm()` para ajustar los modelos lineales generalizados, que se especificaron dando una descripción simbólica del predictor lineal y una descripción de la distribución del error.
+
+```{r}
+set.seed(123)
+modelo_glm <- glm(modelocompleto,data = train_set,family = "binomial")
+```
+
+```{r}
+pred_glm = as.factor(ifelse(
+  predict(modelo_glm, newdata =  test_set[-1] )> 0.5, "Spam", "Ham"))
+confusionMatrix(data =pred_glm,reference = test_set$Class) 
+```
+
+```{r}
+prec1 <- 2533/(2533+2433)
+prec1
+recall1 <- 2533/(2533+363)
+recall1
+f11 <- (2*0.51*0.87)/(0.51+0.87)
+f11 
+pred_glm <- as.numeric(pred_glm)
+(roc_glm <- roc(test_set$Class, pred_glm))
+auc(test_set$Class, pred_glm)
+```
+
+
+
+
+#### Random Forest
+
+El bosque aleatorio, como su nombre indica, está formado por un gran número de árboles de decisión individuales que funcionan como un conjunto. Cada árbol individual del bosque aleatorio despliega una predicción de clase y la clase con más votos se convierte en la predicción del modelo (Yiu, 2019).
+
+```{r}
+set.seed(123)
+modelo_rf = randomForest::randomForest(x = train_set[-1],
+                          y = train_set$Class,
+                          ntree = 1000, importance = TRUE)
+```
+
+
+```{r}
+pred_rf = predict(modelo_rf, newdata =  test_set[-1])
+confusionMatrix(data =pred_rf,reference = test_set$Class) 
+```
+
+```{r}
+prec2 <- 1710/(1710+3256)
+prec2
+recall2 <- 1710/(1710+0)
+recall2
+f12 <- (2*0.34*1)/(0.34+1)
+f12
+pred_rf <- as.numeric(pred_rf)
+(roc_rf <- roc(test_set$Class, pred_rf))
+auc(test_set$Class, pred_rf)
+```
+
+
+#### Support Vector Machine (SVM)
+
+##### Radial Kernel
+
+El objetivo de este modelo es encontrar un hiperplano en un espacio de N dimensiones (N - el número de características) que clasifique claramente los puntos de datos. Para separar las dos clases de puntos de datos (*Spam* y *Ham*), hay muchos hiperplanos posibles que podrían elegirse (Gandhi, 2018).
+
+Nuestro objetivo es encontrar un plano que tenga el máximo margen, es decir, la máxima distancia entre los puntos de datos de ambas clases. La maximización de la distancia de margen proporciona cierto refuerzo para que los futuros puntos de datos puedan ser clasificados con más confianza.
+
+```{r}
+set.seed(123)
+modelo_svmradial = e1071::svm(formula = modelocompleto,
+                data = train_set,
+                type = 'C-classification',
+                kernel = 'radial')
+```
+
+```{r}
+pred_svmr = predict(modelo_svmradial, newdata =  test_set[-1])
+confusionMatrix(data =pred_svmr,reference = test_set$Class) 
+```
+
+
+```{r}
+prec3 <- 3237/(3237+1729)
+prec3
+recall3 <- 3237/(3237+197)
+recall3
+f13 <- (2*0.65*0.94)/(0.65+0.94)
+f13
+(roc_svmr<- roc(test_set$Class, as.numeric(pred_svmr)))
+auc(test_set$Class, as.numeric(pred_svmr))
+```
+
+#### Naive Bayes 
+
+Los clasificadores Naive Bayes son una colección de algoritmos de clasificación basados en el Teorema de Bayes. No se trata de un único algoritmo, sino de una familia de algoritmos en la que todos comparten un principio común, es decir, cada par de características que se clasifican es independiente de las demás (GeeksforGeeks, 2022).
+
+```{r}
+modelo_nb <- naivebayes::naive_bayes(modelocompleto, data = train_set, usekernel = T) 
+```
+
+```{r}
+pred_nb = predict(modelo_nb, newdata =  test_set[-1])
+confusionMatrix(data =pred_nb,reference = test_set$Class) 
+```
+
+
+```{r}
+prec4 <- 0/(0+4966)
+prec4
+recall4 <- 0/(0+0)
+recall4
+f14 <- (2*0*0)/(0+0)
+f14
+pred_nb <- as.numeric(pred_nb)
+(roc_nb<- roc(test_set$Class, pred_nb))
+auc(test_set$Class, pred_nb)
+```
+
+#### Tree-based classification model
+
+Los modelos de clasificación basados en árboles utiliza una serie de declaraciones condicionales para dividir los datos de entrenamiento en subconjuntos. Cada división sucesiva añade cierta complejidad al modelo, que puede utilizarse para hacer predicciones. El modelo resultante puede visualizarse como una hoja de ruta de pruebas lógicas que describe el conjunto de datos (Lee, 2020).
+
+```{r dt, message=FALSE, warning=FALSE, include=FALSE}
+arbol = rpart(formula = modelocompleto,data = train_set)
+rpart.plot(x = arbol, yesno = 2, type = 0, extra = 0)
+```
+
+```{r dt pred}
+dtpred = predict(arbol, newdata = test_set, type = 'class')
+confusionMatrix(data = dtpred, reference = test_set$Class) 
+```
+
+```{r}
+prec5 <- 2966/(2966+2000)
+prec5
+recall5 <- 2966/(2966+49)
+recall5
+f15 <- (2*0.59*0.98)/(0.59+0.98)
+f15
+dtpred <- as.numeric(dtpred)
+(roc_nb<- roc(test_set$Class, dtpred))
+auc(test_set$Class, dtpred)
+```
+
+
+
+## **Modelo de clasificación seleccionado**
+
+De acuerdo a los resultados obtenidos, se puede concluir que el modelo más viable es el **SVM**.
+
+- **Accuracy**: Comparando todos los modelos, el modelo predictivo más certero fue, efectivamente, el SVM con 87.4%.
+- **Sensitivity**: De acuerdo a los resultados, el SVM fue el tercer modelo más certero en predecir los verdaderos positivos de cada categoría disponible con el 98.1%, después del Random Forest y el Naive Bayes con el 100%.
+- **Specificity**: De acuerdo a los resultados, el SVM fue el modelo más certero en predecir los verdaderos negativos de cada categoría disponible con el 65.1%.
+- **Precision**: A partir de los resultados obtenidos, se puede deducir que el SVM es el modelo más certero en identificar positivos de un total de elementos identificados como positivos, minimizando el error de los falsos positivos con 65.1%
+- **Recall**: A partir de los resultados obtenidos, el SVM fue el tercer modelo más certero en identificar correctamente positivos del total de positivos verdaderos, minimizando el error de los falsos negativos con 94.2%.
+- **F1**: Considerando la puntuación de Recall y de Precisión, el SVM fue el modelo más certero con 76.8%.
+- **ROC AUC**: El SVM fue el cuarto modelo que mejor compensa la tasa de verdaderos positivos (TPR) y la tasa de falsos positivos (FPR), o en otras palabras, que mejor diferencía entre clases, después de GLM, Random Forest y Tree-based.
+
+
+```{r}
+classif_model <- c("GLM", "Random Forest", "SVM", "Naive Bayes", "Tree-based")
+Accuracy <- c("81.8%", "78.8%", "87.4%", "67.6%", "86.6%")
+Sensitivity <- c("96.5%", "100%", "98.1%", "100%", "99.5%")
+Specificity <- c("51.0%", "34.4%", "65.1%", "0%", "59.7%")
+Precision <- c("51.0%", "34.4%", "65.1%", "0%", "59.7%")
+Recall <- c("87.4%", "100%", "94.2%", "0%", "98.3%")
+F1 <- c("64.3%", "50.7%", "76.8%", "0%", "73.6%")
+Auc <- c("73.7%", "49.4%", "48.9%", "5%", "49.0%")
+selection_criteria <- data.frame(classif_model, Accuracy, Sensitivity, Specificity, Precision, Recall, F1, Auc)
+selection_criteria
+```
+
+
+
+
+
+
