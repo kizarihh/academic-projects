@@ -1,0 +1,271 @@
+---
+title: "Evidencia 1"
+subtitle: "Modelo de datos"
+author: "Equipo 1"
+date: "18-08-2021"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: TRUE
+    toc_float:
+      smooth_scroll: FALSE
+      collapsed: FALSE
+---
+
+`Integrantes`
+
+* Kízari Hernández Huerta A00828451
+* Claudia Durán Bárcenas A01351504
+* Paloma Quiroz Gómez A01620449
+* Luis Alberto Aragón Szymanski A01412283
+* Carolina Velarde Díaz A01720509
+
+`Prerrequisitos`
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(skimr)
+library(data.table)
+```
+
+```{r}
+datos <- read.csv("~/Documents/5to sem/Bloques/Plataformas de analítica de negocios para organizaciones/210815COVID19MEXICO.csv") %>%
+  select(ID_REGISTRO,SECTOR,TIPO_PACIENTE:NEUMONIA,EMBARAZO,DIABETES:OTRO_CASO,UCI,ENTIDAD_RES,TIPO_PACIENTE,EDAD) 
+```
+
+# Análisis y depuración de los datos
+
+## Selección de datos
+
+Decidimos filtrar los datos por entidad de residencia del paciente, esto para reducir la cantidad de datos en el dataframe. Seleccionamos las entidades de Campeche, Baja California Sur y Colima ya que son los Estados con menor población en México.
+
+```{r}
+datos1 <- datos %>% 
+  filter(ENTIDAD_RES == 3 | ENTIDAD_RES== 4 | ENTIDAD_RES == 6 )
+```
+
+## Identificación de valores nulos y atípicos
+
+### Numéricos
+
+Las columnas con variables numéricas a excepción de EDAD tienen los siguientes valores:
+
+* 1: Si
+* 2: No
+* 97: No aplica
+* 98: Se ignora
+* 99: No especificado
+
+Todos los valores que sean de 97, 98 o 99 se cambiarán por NA's. Para hacer esto, primero cambiaremos EDAD a caracter para que este no sea modificado al momento de cambiar todas las columnas de tipo numérico con valores de 97, 98 o 99 por NA's.
+
+```{r}
+datos1$EDAD  <- as.character(datos1$EDAD)
+```
+
+```{r}
+datos2 <- datos1%>%  
+  mutate_if(is.numeric, 
+            function(x) ifelse(x >= 97, NA, x))
+```
+
+Una vez que hayamos reemplazado los 97, 98 y 99, regresamos EDAD a valores de tipo numérico.
+
+```{r}
+datos2$EDAD  <- as.numeric(datos2$EDAD)
+```
+
+Con el siguiente código estamos estableciendo que si la edad es menor a 0 o mayor a 115, se considere como NA. Esto para evitar valores atípicos en la base de datos.
+
+```{r}
+datos2 <- datos2 %>% 
+  mutate(EDAD = ifelse(EDAD < 0  | EDAD > 115, NA,EDAD ))
+  
+```
+
+### Fechas
+
+También observamos que en las columnas de tipo fecha hay algunos valores que aparecen como 9999-99-99, por lo que se cambiarán por NA's.
+
+```{r}
+datos2 <- datos2%>%  
+  mutate_if(is.character, 
+            function(x) ifelse(x == "9999-99-99", NA, x))
+```
+
+Además, se cambiarán las columnas de FECHA_INGRESO y FECHA_SINTOMAS a formato fecha, siendo que están como caracter. La columan de FECHA_DEF ya estaba con el formato de fecha con el código anterior.
+
+```{r}
+datos2$FECHA_INGRESO <- as.Date(datos2$FECHA_INGRESO,tryFormats = c("%Y-%m-%d", "%Y/%m/%d"))
+datos2$FECHA_SINTOMAS <- as.Date(datos2$FECHA_SINTOMAS,tryFormats = c("%Y-%m-%d", "%Y/%m/%d"))
+```
+
+
+## Imputación / corrección de valores
+
+
+Todos los valores numéricos contienen NA's a excepción de EDAD. Decidimos crear 7 grupos de acuerdo al rango de edades e imputar el resto de las columnas numéricas con la mediana del grupo de edad del cual pertenece como se muestra a continuación.
+
+```{r}
+datos3<- datos2 %>%
+  mutate(Grupo_Edad=case_when(
+    EDAD %in% 0:15 ~ "A",
+    EDAD %in% 16:30 ~ "B",
+    EDAD %in% 31:45 ~ "C",
+    EDAD %in% 46:70 ~ "D",
+    EDAD %in% 71:85 ~ "E",
+    EDAD %in% 86:100 ~ "F",
+    EDAD %in% 101:115 ~ "G"))
+datos3$Grupo_Edad <- as.factor(datos3$Grupo_Edad)
+```
+
+### Fechas
+
+La columna FECHA_DEF será de utilidad para nuestro KPI de defunciones por sector. Sin embargo, necesitamos saber si falleció el paciente o no, por lo que crearemos una nueva columna llamada DEFUNCION con las siguientes condiciones:
+
+* 1 - El paciente falleció.
+* 2 - El paciente está vivo.
+
+```{r}
+datos3<- datos3 %>% 
+  mutate(DEFUNCION = as.factor(ifelse(is.na(FECHA_DEF),0,1))) 
+datos3 <- datos3[,-6]
+```
+
+### Numéricos
+Aquí hicimos 7 versiones del reemplazo de NA's. Cada iteración representa un grupo de edad. Después de separar los datos y reemplazar los valores necesarios, juntaremos los 7 dataframes en uno solo.
+
+```{r}
+A <- datos3 %>%
+  filter(Grupo_Edad == "A") 
+A  <-  A %>% 
+    mutate_if(is.numeric, 
+            function(x) ifelse(is.na(x), 
+                               median(x, na.rm = TRUE), 
+                               x))
+```
+
+```{r}
+B <- datos3 %>%
+  filter(Grupo_Edad == "B") 
+B  <-  B %>%
+    mutate_if(is.numeric, 
+            function(x) ifelse(is.na(x), 
+                               median(x, na.rm = TRUE), 
+                               x))
+```
+
+```{r}
+C <- datos3 %>%
+  filter(Grupo_Edad == "C") 
+C  <- C  %>%
+    mutate_if(is.numeric, 
+            function(x) ifelse(is.na(x), 
+                               median(x, na.rm = TRUE), 
+                               x))
+```
+
+```{r}
+D <- datos3 %>%
+  filter(Grupo_Edad == "D") 
+D  <- D  %>%
+    mutate_if(is.numeric, 
+            function(x) ifelse(is.na(x), 
+                               median(x, na.rm = TRUE), 
+                               x))
+```
+
+```{r}
+E <- datos3 %>%
+  filter(Grupo_Edad == "E") 
+E <- E  %>%
+    mutate_if(is.numeric, 
+            function(x) ifelse(is.na(x), 
+                               median(x, na.rm = TRUE), 
+                               x))
+```
+
+```{r}
+FF <- datos3 %>%
+  filter(Grupo_Edad == "F") 
+FF  <- FF  %>%
+    mutate_if(is.numeric, 
+            function(x) ifelse(is.na(x), 
+                               median(x, na.rm = TRUE), 
+                               x))
+```
+
+```{r}
+G <- datos3 %>%
+  filter(Grupo_Edad == "G") 
+G  <- G  %>%
+    mutate_if(is.numeric, 
+            function(x) ifelse(is.na(x), 
+                               median(x, na.rm = TRUE), 
+                               x))
+```
+
+Juntamos los datos en un solo data frame
+```{r}
+datos4  <-  bind_rows(A,B,C,D,E,FF,G)
+```
+## Corrección del tipo de datos
+
+Consideramos que las siguientes son de tipo factor:
+
+```{r}
+datos4$SECTOR <- as.factor(datos4$SECTOR)
+datos4$TIPO_PACIENTE <- as.factor(datos4$TIPO_PACIENTE)
+datos4$INTUBADO <- as.factor(datos4$INTUBADO)
+datos4$NEUMONIA <- as.factor(datos4$NEUMONIA)
+datos4$EMBARAZO <- as.factor(datos4$EMBARAZO)
+datos4$DIABETES <- as.factor(datos4$DIABETES)
+datos4$EPOC <- as.factor(datos4$EPOC)
+datos4$ASMA <- as.factor(datos4$ASMA)
+datos4$INMUSUPR <- as.factor(datos4$INMUSUPR)
+datos4$HIPERTENSION <- as.factor(datos4$HIPERTENSION)
+datos4$OTRA_COM <- as.factor(datos4$OTRA_COM)
+datos4$CARDIOVASCULAR <- as.factor(datos4$CARDIOVASCULAR)
+datos4$OBESIDAD <- as.factor(datos4$OBESIDAD)
+datos4$RENAL_CRONICA <- as.factor(datos4$RENAL_CRONICA)
+datos4$TABAQUISMO <- as.factor(datos4$TABAQUISMO)
+datos4$OTRO_CASO <- as.factor(datos4$OTRO_CASO)
+datos4$UCI <- as.factor(datos4$UCI)
+datos4$ENTIDAD_RES <- as.factor(datos4$ENTIDAD_RES)
+```
+## Eliminación de duplicados
+
+Con unique() pudimos observar que todas las filas son únicas, por lo tanto, no hay duplicados en la base de datos.
+
+```{r}
+str(datos4)
+```
+
+```{r}
+datos5 <- unique( datos4[ , 1:24] )
+```
+
+```{r}
+str(datos5)
+```
+
+```{r}
+datos5 <- datos5 %>% 
+  mutate(comorbidad = ifelse(NEUMONIA == 1, 1, 
+                             ifelse(DIABETES == 1, 1, 
+                                    ifelse(EPOC == 1, 1, 
+                                           ifelse(ASMA == 1, 1, 
+                                                  ifelse(INMUSUPR == 1, 1,
+                                                         ifelse(HIPERTENSION == 1, 1,
+                                                                ifelse(OTRA_COM == 1, 1,
+                                                                       ifelse(CARDIOVASCULAR == 1, 1,
+                                                                              ifelse(OBESIDAD == 1, 1,
+                                                                                     ifelse(RENAL_CRONICA == 1, 1, 
+                                                                                            ifelse(TABAQUISMO == 1, 1,
+                                                                                                   if_else(OTRO_CASO == 1, 1, 2)))))))))))))
+```
+
+```{r}
+write.csv(datos5,"db_covid.csv")
+```
