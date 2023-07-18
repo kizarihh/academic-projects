@@ -1,0 +1,629 @@
+---
+title: '**Evidencia 1**'
+subtitle: 'Zona de Inteligencia de Negocios'
+date: '`r Sys.Date()`'
+output: 
+  html_document:
+    theme: lumen
+    code_folding: hide
+    toc: TRUE
+    toc_depth: 4
+    number_sections: FALSE
+    toc_float:
+      smooth_scroll: TRUE
+      collapsed: FALSE
+editor_options: 
+  chunk_output_type: inline
+---
+
+**Equipo #3**:
+
+* Carolina Velarde Díaz A01720509
+* Chantal Aimeé Simó García A00827554 
+* Kízari Hernández Huerta A00828451
+* Ximena Araceli Martínez Flores A00829670
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+pacman::p_load(foreign,jsonlite,leaflet,leaflet.extras,magrittr,mapview,leafsync,leaflet,rgdal,rworldmap,spdep,sp,spatialreg,readxl,ggmap,gmapsdistance,knitr,tidyverse,tigris,tmap,formattable)
+thematic::thematic_rmd()
+```
+
+# **Introducción**
+
+**Datlas** es una *startup* especializada en analítica que se enfoca en convertir datos en inteligencia empresarial. Su enfoque se centra en desarrollar un ecosistema completo que incluye contenido, plataformas digitales y métodos basados en técnicas de inteligencia artificial. En este contexto, se nos presenta el caso de "Alimentos y Snack Monterrey".
+
+**Alimentos y Snacks Monterrey**, una empresa con sede en Monterrey, fue establecida a principios de 2020. Su especialización radica en la fabricación y distribución de una amplia gama de productos alimenticios, enfocándose principalmente en satisfacer las necesidades de restaurantes, hoteles, catering y cafeterías. Su compromiso reside en ofrecer opciones gastronómicas de primera calidad y satisfacer la creciente demanda de alimentos para los establecimientos de servicio en los 13 municipios de la ciudad de Monterrey.
+
+En la actualidad, la empresa se encuentra en una etapa de expansión, por lo cual han solicitado ayuda para desarrollar una estrategia de crecimiento. El objetivo principal es *permitirles atender un mayor número de negocios, aumentar la distribución de sus productos y lograr un incremento sostenido en sus ventas.*
+
+# **Análisis descriptivo**
+
+Considerando el objetivo central, se comenzó a examinar los datos de la empresa. Se identificaron 5 bases de datos, de las cuales 4 son internas y contienen información sobre clientes actuales, pedidos, catálogo de productos y detalles de las órdenes. Por otro lado, existe una base de datos externa que incluye prospectos a los que les gustaría expandirse. Además de las bases de datos internas, también se investigaron fuentes externas para evaluar el desempeño de la industria, identificar mercados objetivo y analizar las oportunidades de crecimiento en ellos.
+
+Previo al análisis exploratorio, se realizó una exhaustiva limpieza de cada una de las bases de datos. Se ajustaron los tipos de datos de las variables, se completaron los datos faltantes según las necesidades, se eliminaron variables con un alto número de valores faltantes, se corrigieron los factores y se crearon variables adicionales relevantes para la categorización y agrupamiento de la información.
+
+## Análisis exploratorio
+
+Después de realizar la limpieza de los datos, se procedió a combinar las bases correspondientes de la siguiente manera:
+
+<img src='/Users/kizarihdz/Documents/8/Bloques/Planeación estratégica basada en analítica prescriptiva/Reto_Evidencia1_ModeloER.jpg'>
+
+En el modelo entidad-relación, se puede observar que la base de datos *Catálogo* se une con la base de datos *Detalles* mediante el ID de productos, formando así la unión denominada *Base 1*. Por otro lado, la base de datos *Clientes* se une con la base de datos *Pedidos* a través del ID de clientes, generando la unión como *Base 2*. Ambas bases se unen mediante el ID pedido, lo que resulta en la combinación de las cuatro bases de datos.
+
+Gracias a la combinación de las bases de datos, se pudieron generar variables adicionales de gran importancia para el análisis exploratorio. Estas variables incluyen las *ventas por cliente*, *ticket*, *producto*, entre otras, lo cual resulta especialmente valioso dado que la mayoría de los datos son descriptivos (factores). Estas nuevas variables numéricas brindaron información relevante para el desarrollo de estrategias de crecimiento y expansión de Alimentos y Snacks Monterrey.
+
+En el análisis exploratorio se realizaron gráficas, consultas (queries) y análisis descriptivos generales sobre las bases de datos. Para obtener una visión más detallada de todas las gráficas y consultas empleadas, se adjunta el código correspondiente en el siguiente enlace https://rpubs.com/cvelarde/e1_analisis
+
+### Hallazgos
+
+`Generales`
+
+* En cuanto a las cifras generales, el total de ventas durante el periodo comprendido entre 2020 y 2023 alcanzó los 249,965,677 MXN. Sin embargo, al excluir las órdenes canceladas, el total de ventas se reduce a 237,278,744 MXN.
+* Al analizar las ventas anuales, se observa una ligera disminución en su valor. En promedio, las ventas experimentan una disminución del 0.31% cada año.
+* Durante el análisis, se identificaron dos grupos de clientes con diferentes patrones de compra. Un grupo muestra un rango de compras que oscila entre 34 y 40 millones, mientras que el otro grupo tiene un rango de compras de 10 a 15 millones.
+
+`Productos`
+
+* En relación al catálogo de productos, se destaca que el 53% de los productos pertenecen a la familia animal, seguido por un 12% que corresponde a la categoría de sazón y un 10% que se clasifica como vegetal.
+* En cuanto a la clasificación de los productos en el catálogo, se observa que el 54% de ellos pertenecen a la categoría de congelados, mientras que el restante 46% corresponde a la categoría normal.
+* En términos de precios, el 75% de los productos tienen un valor de 124 MXN. El rango de precios va desde 12 MXN, correspondiente al producto de menor precio, hasta 250 MXN, que es el precio máximo registrado.
+* Al realizar un análisis de ganancias de los productos en el catálogo (Top-Bottom), se concluye que todos los productos son rentables, por lo que no se requiere llevar a cabo una limpieza del catálogo en este aspecto.
+
+`Pedidos`
+
+* La mayoría de los productos en el catálogo suelen ser ordenados en cantidades que oscilan entre 15 y 30 piezas.
+* En cuanto al tiempo de entrega de las órdenes, normalmente se realizan en un período de 1 a 3 días. Sin embargo, es importante destacar que el 82% de los pedidos son entregados en un lapso de 1 a 2 días, sin importar la ubicación de entrega.
+* A lo largo de los 4 años de servicio, solo el 5% de los pedidos han sido cancelados, lo que representa un total de 12,686,933 MXN.
+* En relación a los pedidos realizados por los clientes, el mayor número de pedidos registrado es de 862, mientras que el menor número es de 236 pedidos.
+
+`Clientes`
+
+* De los 100 clientes actuales, 56 se consideran clientes activos debido a su frecuente realización de compras, mientras que los restantes 44 clientes se clasifican como pasivos, ya que no se tiene registro de órdenes por parte de ellos.
+* Asumiendo que las ventas totales provienen únicamente de los clientes activos, se puede inferir que este grupo es responsable de todas las ventas realizadas.
+* En cuanto a la categorización de los clientes, todos ellos se clasifican como restaurantes y hoteles. De este total, el 76% corresponde a restaurantes, mientras que el 24% son hoteles.
+* Dentro del grupo de clientes activos, 45 son restaurantes y 11 son hoteles, lo cual indica que la mayoría de los clientes activos pertenecen al sector de restaurantes. Por otro lado, entre los clientes pasivos, 31 son restaurantes y 13 son hoteles.
+* En cuanto a la ubicación geográfica de los clientes, se observa que la mitad de ellos se encuentran en Monterrey. La otra mitad se distribuye entre los municipios de Apodaca, Cadereyta, Escobedo, Guadalupe, Juárez, San Nicolás, San Pedro, Santa Catarina y Santiago.
+
+# **Modelos analiticos empleados**
+
+Luego de realizar el análisis descriptivo, se continuó con el análisis predictivo utilizando modelos de regresión lineal, `Random Forest` y `Support Vector Machine` para predecir las ventas de Alimentos y Snacks Monterrey. Para seleccionar las variables relevantes, se utilizó una matriz de correlación y se aplicó un modelo de regresión lineal con parámetros de selección de AIC.
+
+Los resultados obtenidos fueron los siguientes:
+
+* En la matriz de correlación, se observó que las categorías y familias de productos tienen una correlación positiva significativa con las ventas, que es la variable objetivo.
+* Las variables de ubicación no mostraron correlación con las ventas, pero sí mostraron cierta correlación entre sí.
+* Al incluir variables de fuentes externas, específicamente utilizando la base de datos del DENUE, se determinó que estas variables no presentan una correlación significativa con las ventas.
+* Además de la matriz de correlación, se aplicó el modelo "Stepwise" con parámetros de selección de AIC para identificar las variables más relevantes en la predicción de las ventas.
+* Los resultados del modelo indicaron que las variables relacionadas con la categorización o familia de productos son las más significativas para la predicción de las ventas.
+
+Basándose en los resultados obtenidos de la matriz de correlación y el modelo Stepwise, se han seleccionado las siguientes variables para desarrollar los modelos de regresión lineal, `Random Forest` y `Support Vector Machine`:
+
+**ventas_pedido** ~ cantidad_pedido + normal_preparado + congelado_animal + normal_queso + normal_sazón + normal_vegetal + normal_liquido + congelado_preparado + normal_animal + per_ocu_0a5 + per_ocu_6a10 + per_ocu_11a30 + poblacion_2022 + porcentaje_pob_pobreza_ext
+
+Sin embargo, al evaluar los modelos desarrollados, se ha encontrado que las variables no son estadísticamente significativas y, por lo tanto, la precisión de la predicción del modelo es baja. El modelo con el menor error fue de 1494.239, lo cual indica que hay una gran variabilidad en las predicciones. A partir de estos resultados, se ha concluido que no es viable utilizar modelos supervisados en esta situación debido a la falta de significancia estadística y los grandes errores.
+
+Como alternativa, se ha aplicado el modelo de `market basket`, que es un enfoque no supervisado para analizar la información. Este modelo ha permitido identificar patrones y asociaciones entre los productos del catálogo. Se ha descubierto que solo 26 clientes han realizado un total de 36 órdenes recurrentes, siendo el *Restaurante Bondia* el que más órdenes recurrentes ha realizado con 5 órdenes repetidas. Estas órdenes recurrentes representan solo el 0.0012% del total de todas las órdenes.
+
+Además, el modelo ha permitido identificar los productos más solicitados, la cantidad de unidades por pedido y los ingresos generados por ellos. A partir de estos resultados, Se han identificado los 10 principales productos en términos de recurrencia, cantidad de pedidos y ventas, como el salmón, pastel, lomo, jalapeño, deshebrada, panela, philadelphia, diezmillo, bacon y mostaza. Con esta información, se han desarrollado estrategias para promover estos productos y seleccionado prospectos con los cuales promocionarlos en el catálogo.
+
+## Análisis de fuentes externas
+
+Con el fin de lograr la meta de expansión, es crucial considerar el entorno externo en el que opera la empresa. Esto implica analizar la industria en la que se encuentra, el mercado al que se dirige, la demanda y oferta actuales, así como el potencial de crecimiento en ese ámbito.
+
+Para obtener información relevante, se utilizó la base de datos del Directorio Estadístico Nacional de Unidades Económicas (DENUE) de 2023, específicamente en el sector de comercio al por mayor de abarrotes, alimentos, bebidas, hielo y tabaco. También utilizamos datos de reportes del INEGI y ENIGH. Estos datos externos se combinarán con los hallazgos internos para desarrollar estrategias de expansión que se ajusten a las necesidades y objetivos de Alimentos y Snacks Monterrey.
+
+### Hallazgos
+
+`DENUE` 
+
+* En Nuevo León, el comercio al por mayor de abarrotes, alimentos, bebidas, hielo y tabaco se distribuye de la siguiente manera: el 29% se dedica al comercio al por mayor de frutas y verduras frescas, mientras que el 13% corresponde al comercio al por mayor de abarrotes.
+* En cuanto a los municipios más relevantes en esta industria en Nuevo León, se encontró que San Nicolás de los Garza representa el 39.23% de la actividad, seguido de Monterrey con el 22.72% y Guadalupe con el 10.14%.
+* En cuanto a la infraestructura, el 31% de las actividades de comercio al por mayor en Nuevo León se lleva a cabo en la central de abastos, mientras que el 64% no tiene una clasificación específica.
+* Se destaca que la unidad económica *Avipecuaria MARLAN S.A. de C.V.* es responsable del 31.9% de la actividad de comercio al por mayor en la región.
+
+`Nuevo León`
+
+* Según el informe Coyuntura Económica de Nuevo León correspondiente al tercer trimestre de 2021, el Índice Nacional de Precios al Consumidor (INPC) tuvo un aumento del 6% a nivel nacional, mientras que para Monterrey fue del 5.7%.
+* En cuanto a los sectores con mayor incremento de precios, se destaca el sector de alimentos y bebidas con un aumento del 8.1%, seguido del sector de transporte con un 7% de incremento. Por otro lado, el sector de educación y esparcimiento tuvo el menor incremento con un 3.0%.
+* Según el Censo Económico de 2019, Nuevo León cuenta con 151,000 unidades económicas, lo que representa el 3.1% del total de empresas en el país.
+* De acuerdo a la Presentación de Resultados ENIGH 2020, el gasto corriente monetario total estimado en Nuevo León en el tercer trimestre de 2020 fue de 62.6 millones de pesos, y el sector de alimentos y bebidas representó el 32.3% de dicho gasto.
+
+Los descubrimientos obtenidos de fuentes externas proveen información valiosa para evaluar las oportunidades y amenazas de Alimentos y Snacks Monterrey. A continuación, se presentan los siguientes hallazgos:
+
+**Oportunidades externas identificadas**
+
+* Los municipios de San Nicolás de los Garza, Monterrey y Guadalupe presentan una destacada oportunidad de expansión en la industria de comercio al por mayor. Estos municipios muestran un sólido desempeño en este sector, lo que brinda a Alimentos y Snacks Monterrey una excelente oportunidad para ampliar su presencia y alcanzar nuevos clientes.
+* Además, el hecho de que el 32.3% del gasto corriente trimestral en Nuevo León esté destinado al sector de alimentos y bebidas indica una demanda sólida en esta área. Esto crea un entorno propicio para que Alimentos y Snacks Monterrey amplíe su cartera de clientes y aproveche esta oportunidad de crecimiento.
+* Por otra parte, con el 31% de las actividades de comercio al por mayor en Nuevo León relacionadas con la central de abastos, existen oportunidades para establecer relaciones comerciales sólidas en este mercado. Esto permitiría a Alimentos y Snacks Monterrey fortalecer su presencia en la cadena de suministro y aprovechar los beneficios asociados a esta ubicación estratégica.
+
+**Amenazas externas identificadas**
+
+* El sector de alimentos y bebidas ha experimentado un notable aumento en los precios, lo cual puede impactar negativamente en los costos de producción y distribución. Este incremento en los precios puede representar un desafío para Alimentos y Snacks Monterrey, puesto que podría afectar su rentabilidad y competitividad en el mercado.
+* Además, dado el gran número de empresas que operan en el comercio al por mayor en Nuevo León, existe una competencia acorde en este sector. Esta competencia puede ser un obstáculo para la empresa a la hora de expandir su cartera de clientes y captar una parte significativa del mercado. Es importante que Alimentos y Snacks Monterrey desarrolle estrategias efectivas para diferenciarse y destacar entre sus competidores.
+
+Basándose en las oportunidades y amenazas identificadas, se llegó a la conclusión de que Alimentos y Snacks Monterrey tiene la posibilidad de aprovechar las oportunidades presentes para expandir su base de clientes y diversificar su gama de productos. No obstante, es de vital importancia que la empresa esté atenta a las amenazas, como el aumento de los precios y la competencia, y tome medidas estratégicas para contrarrestar cualquier posible impacto negativo.
+
+## Análisis base de datos `prospectos`
+
+Tras realizar un análisis de la base de datos de prospectos de Alimentos y Snacks Monterrey, se ha identificado una cantidad aproximada de 10 mil prospectos potenciales para la expansión.
+
+### Hallazgos
+
+`Clientes propspectos`
+
+* El 83% de los prospectos corresponden a empresas micro, que tienen de 0 a 5 personas. El 15% son empresas pequeñas, con un rango de 6 a 30 personas, el 2% son empresas medianas, con un rango de 31 a 100 personas, y el 0.02% son empresas grandes, de más de 250 personas.
+* En cuanto a la distribución por sector, el 73% de los prospectos son restaurantes, el 10% pertenecen al sector de servicios, el 11% son cafeterías, el 2% son alojamientos y el 3% son centros nocturnos.
+* Los prospectos se encuentran ubicados en 46 municipios del estado de Nuevo León, así como uno en el Estado de México. Sin embargo, existe una concentración significativa en los municipios de Monterrey, Guadalupe, San Nicolás, Apodaca y Escobedo.
+* En cuanto a las fechas de alta de las empresas prospecto, se observa que el 43% de ellas fueron registradas entre 2010 y 2014, mientras que el 57% restante se registraron entre 2016 y 2022.
+
+### Elección de prospectos 
+
+Con base en la evaluación interna realizada, se han identificado tanto las fortalezas como las debilidades de Alimentos y Snacks Monterrey. Estos hallazgos son fundamentales para el desarrollo de un plan de expansión efectivo que se ajuste a los objetivos y necesidades del negocio.
+
+**Fortalezas**
+
+* Cuenta con una cartera de clientes recurrentes activos.
+* Los clientes actuales son diversos y poseen experiencia en la industria de alimentos.
+* Las ventas y ganancias se han mantenido estables a lo largo de los años.
+* El catálogo de productos es rentable y adaptable a diferentes tipos de negocios.
+* La capacidad logística permite la entrega rápida (1 a 2 días) en diversos puntos de venta de los 13 municipios de la zona metropolitana de Monterrey.
+
+**Debilidades**
+
+* Falta de seguimiento y control de los clientes pasivos, lo que impide aprovechar oportunidades de negocio.
+* Ausencia de seguimiento de las órdenes canceladas, lo que representa pérdidas financieras significativas.
+
+Con estas fortalezas y debilidades en mente, se concluye que Alimentos y Snacks Monterrey posee una base sólida de clientes recurrentes, una oferta de productos rentable y una capacidad logística para atender una amplia área geográfica. Sin embargo, es crucial abordar las debilidades relacionadas con el seguimiento de los clientes pasivos y las órdenes canceladas para mejorar el desempeño y aprovechar todo el potencial de crecimiento en el mercado.
+
+El siguiente paso en la estrategia de expansión es realizar un análisis FODA y utilizar los hallazgos para identificar los factores clave que determinarán el enfoque en los prospectos. Con una base de aproximadamente 10,000 prospectos distribuidos en diferentes áreas, es esencial llevar a cabo un proceso de depuración para identificar el mercado objetivo de expansión.
+
+Para realizar este proceso, se implementará un método de eliminación mediante el cual se filtrarán los prospectos con base a las necesidades, la experiencia y el análisis FODA de Alimentos y Snacks Monterrey. En este sentido, se mantendrá el enfoque en dos aspectos clave: la *ubicación geográfica* y las *características demográficas de los negocios prospectos*.
+
+**Ubicación geográfica**
+
+* Ubicados en el estado de Nuevo León: Durante el análisis exploratorio se encontró que sus prospectos se encuentran en Nuevo León y el Estado de México. Para poder concentrar el mercado se hará enfoque en Nuevo León. 
+* Ubicados en el municipio de Monterrey: En el análisis de oportunidades se encontró que los municipios de San Nicolás, Monterrey y Guadalupe presentan una gran oportunidad de expansión, esto debido a su destacada participación en la industria de comercio al por mayor. Sin embargo, para temas de expansión se busca crecer de adentro hacia afuera, por lo que se comenzará haciendo enfoque en los prospectos del municipio de Monterrey. 
+* Ubicados cerca de la CEDIS central: El enfoque en la centricidad con respecto a la CEDIS permite tener más cercanía con los clientes y llevar un mejor seguimiento de lo mismo. De tal manera que se dé oportunidad de mejora a su debilidad del inadecuado seguimiento de sus clientes. 
+
+**Demográficos de los negocios**
+
+Los filtros demográficos fueron seleccionados considerando el comportamiento de los clientes activos, el tipo y giro de negocios, y la experiencia de Alimentos y Snacks Monterrey en la industria.
+
+* Enfoque en prospectos de restaurantes y alojamientos:
+  + Enfoque en restaurantes que ofrecen servicio a la carta y especialidades de tacos y tortas, debido a su gran número de pedidos recurrentes, ingresos significativos y potencial de crecimiento. 
+  + También se hará enfoque en alojamientos como hoteles con servicios integrados, departamentos y casas amuebladas con servicios de hotelería, aprovechando la oportunidad que representan en términos de variabilidad, expansión y potencialización del catálogo actual, dadas las características de los negocios de alojamiento.
+
+* Enfoque en prospectos de comercios pequeños y medianos:
+  + Empresas de 6 a 11 personas, que son pequeñas y tienen necesidades específicas de demanda de alimentos debido a su personal reducido.
+  + Empresas de 11 a 30 personas, ya que son ideales para proporcionar servicios más especializados y potenciar el catálogo actual.
+  + Empresas de 51 a 100 personas, ya que estas medianas empresas suelen tener una demanda constante de alimentos, lo cual representa una oportunidad para establecer contratos a largo plazo.
+
+* Enfoque en prospectos que hayan sido registrados a partir del año 2015: Esto aegura que sean empresas existentes y que demuestren experiencia y madurez en la industria.
+
+# **Estrategia de expansión**
+
+Después de aplicar todos los filtros, se ha logrado reducir la lista a 57 clientes prospectos. Con esta selección, el objetivo es expandir el negocio y duplicar el portafolio de clientes en un mercado más selecto y con un crecimiento seguro, basándose en el análisis interno y externo realizado para Alimentos y Snacks Monterrey en los próximos tres años.
+
+Para implementar la estrategia y ganar cuota de mercado, se ha hecho enfoque en todo el proceso de análisis descriptivo previo. La estrategia se enfoca en tres aspectos principales: *mantener clientes activos, potenciar el catálogo actual y adquirir nuevos clientes*.
+
+En primer lugar, se hará enfoque en mantener a los clientes activos actuales, ya que son fundamentales para el éxito de la empresa. Estos clientes demuestran ser rentables y recurrentes, por lo que es crucial mantener su lealtad ofreciendo una experiencia excepcional. Esto implica un seguimiento cercano de sus necesidades, brindar un servicio amigable y eficiente, y tener la capacidad de personalizar los pedidos según sus preferencias.
+
+En segundo lugar, se busca potenciar el catálogo actual, centrándose en la recurrencia y las ganancias. Se identificaron los productos más destacados y se desarrollaron estrategias para potenciar su venta. Esto incluye la adquisición de nuevos clientes que ordenen estos productos populares dentro de su segmento, así como la implementación de estrategias de venta que promuevan tanto los productos más demandados como aquellos con menor demanda.
+
+Por último, se hizo enfoque en la adquisición de nuevos clientes para impulsar la expansión de Alimentos y Snacks Monterrey. Utilizando los hallazgos del análisis FODA, se identificaron variables clave para la selección de prospectos. Con base en estos criterios, se han identificado 57 clientes prospectos que permitirán duplicar el portafolio de clientes, aumentar la cuota de mercado y destacar frente a la competencia.
+
+Con esta estrategia integral, se confía en que Alimentos y Snacks Monterrey fortalecerá su posición en el mercado, logrando una mayor participación y un crecimiento significativo.
+
+<img src='/Users/kizarihdz/Documents/8/Bloques/Planeación estratégica basada en analítica prescriptiva/Reto_Evidencia1_Estrategia.jpg'>
+
+## Escenario a tres años
+
+Se realizaron análisis de predicción de ventas utilizando los datos internos de la empresa en varios escenarios. Para ello, se transformaron los datos en una serie de tiempo trimestral, sumando el total de las órdenes a lo largo del tiempo activo. El periodo considerado va desde el primer trimestre de 2020 hasta el primer trimestre de 2023. Se utilizó un modelo ARIMA para mostrar los datos históricos y realizar predicciones, considerando intervalos de confianza del 80% y 95% para escenarios pesimistas y optimistas.
+
+Es importante destacar que esta serie de tiempo se basa únicamente en los datos internos de la empresa y no considera factores externos, lo que puede afectar la precisión de las predicciones. Esto se refleja en los diferentes escenarios posibles, donde se observan valores tanto muy bajos como muy altos, dependiendo del intervalo de confianza seleccionado.
+
+<img src='/Users/kizarihdz/Documents/8/Bloques/Planeación estratégica basada en analítica prescriptiva/Reto_Evidencia1_Grafico1.png'>
+
+Además, podemos analizar el promedio de los pronósticos obtenidos, que representa la media de todos los escenarios mostrados anteriormente. Este promedio revela una tendencia estable en la predicción de ventas.
+
+<img src='/Users/kizarihdz/Documents/8/Bloques/Planeación estratégica basada en analítica prescriptiva/Reto_Evidencia1_Grafico2.png'>
+
+Basándose en los resultados obtenidos y los hallazgos internos y externos identificados, se confía en el crecimiento de Alimentos y Snacks Monterrey. Estos resultados indican que, manteniendo la empresa en su estado actual, las ventas se mantendrán estables en los próximos 3 años. Por lo que, considerando las amplias áreas de oportunidad que presenta el mercado, se cree que la expansión a través de la adquisición de clientes prospectos representa una excelente oportunidad de crecimiento para el negocio durante este periodo.
+
+<hr>
+
+# **Benchmarking**
+
+## *Contexto de la empresa*{.tabset}
+
+### Alimentos y Snacks Monterrey
+
+Alimentos y Snacks Monterrey, una empresa con sede en Monterrey, fue establecida a principios de 2020. Su especialización radica en la fabricación y distribución de una amplia gama de productos alimenticios, enfocándose principalmente en satisfacer las necesidades de restaurantes, hoteles, catering y cafeterías. Su compromiso reside en ofrecer opciones gastronómicas de primera calidad y satisfacer la creciente demanda de alimentos para los establecimientos de servicio en los 13 municipios de la ciudad de Monterrey.
+
+### HB Alimentos
+
+HB Alimentos es una empresa originaria de Monterrey, Nuevo León, con amplia experiencia en la distribución de alimentos. Con más de 25 años de experiencia en el mercado, se ha consolidado como un referente en la industria alimentaria de la región.
+
+La empresa se especializa en proporcionar soluciones alimentarias de calidad a diversos sectores, incluyendo la industria HORECA (hoteles, restaurantes y cafeterías). Su objetivo es ofrecer una amplia gama de productos alimenticios para satisfacer las necesidades de sus clientes.
+
+HB Alimentos se destaca por su variedad de productos, que abarca categorías como carnes, lácteos, panificación, abarrotes, pescados y mariscos, así como productos frescos y congelados. Además de la distribución de alimentos, también brinda servicios de asesoría en la planeación y desarrollo de menús, adaptándose a las preferencias y exigencias del mercado.
+
+*(HB Alimentos, s.f.)*
+
+### Sigma Alimentos
+
+Sigma Alimentos es una empresa mexicana líder en la producción y distribución de alimentos refrigerados y congelados. Su portafolio abarca una amplia variedad de productos, como carnes frías y embutidos, productos cárnicos, lácteos y derivados, alimentos congelados, así como platos preparados y comidas listas para consumir. Fundada en 1960, se ha posicionado como una de las principales compañías de alimentos en América Latina. Con marcas reconocidas como FUD, San Rafael, Campofrío y Plumrose, opera en más de 20 países, contando con una extensa red de distribución que abastece a una amplia variedad de tiendas y supermercados.
+
+Además de su enfoque en la producción y distribución de alimentos, Sigma Alimentos ha ampliado su alcance al sector de servicios alimentarios, ofreciendo soluciones adaptadas a las necesidades de restaurantes, hoteles y otras instituciones. A través de adquisiciones estratégicas y una continua innovación, la empresa se ha adaptado con éxito a las cambiantes demandas del mercado.
+
+*(Sigma Alimentos, 2022)*
+
+<hr>
+
+## *Eficiencia de producción*{.tabset}
+
+### Alimentos y Snacks Monterrey
+
+No se cuenta con información para determinar la eficiencia de producción actual de Alimentos y Snacks Monterrey.
+
+### HB Alimentos
+
+De acuerdo con Tania Ramírez, directora de Recursos Humanos de HB Alimentos, la eficiencia productiva de HB Alimentos en Monterrey, Nuevo León es del 85%. Esto significa que por cada 100 unidades de insumos, HB Alimentos produce y/o distribuye 85 unidades de productos. Se trata de un nivel relativamente alto de eficiencia.
+
+### Sigma Alimentos
+
+La planta de Sigma Alimentos en Monterrey, Nuevo León, tiene una capacidad de producción anual de 1.5 millones de toneladas. Gracias a su alta automatización y la utilización de tecnología avanzada en la elaboración de sus productos, ha logrado una eficiencia de producción destacada. En 2022, la planta alcanzó una producción de 1.4 millones de toneladas, lo que representa un nivel de eficiencia del 93%, es decir, se utilizó el 93% de su capacidad de producción potencial (Sigma Alimentos, 2022).
+
+<hr>
+
+## *Calidad del producto*{.tabset}
+
+### Alimentos y Snacks Monterrey
+
+De acuerdo con los datos, a lo largo de los 4 años de servicio, solo el 5% de los pedidos han sido cancelados. Esto significa que por cada 100 unidades de producto que Alimentos y Snacks Monterrey produce y/o distribuye, 5 unidades son rechazadas o devueltas. Esta es una tasa de rechazo o devolución relativamente baja.
+
+### HB Alimentos
+
+De acuerdo con Tania Ramírez, la tasa de rechazo o devolución de HB Alimentos en Monterrey, Nuevo León es del 2%. Esto significa que por cada 100 unidades de producto que HB Alimentos produce y/o distribuye, 2 unidades son rechazadas o devueltas. Esta es una tasa de rechazo o devolución relativamente baja.
+
+### Sigma Alimentos
+
+Según el sitio web de Sigma Alimentos, la tasa de rechazo de la empresa en 2022, específicamente en México, fue del 0.5%. Esto significa que de cada 100 productos fabricados por Sigma Alimentos, sólo 0.5 fueron rechazados. Se trata de una tasa de rechazo muy baja, y es un testimonio de los altos estándares de control de calidad de la empresa.
+
+<hr>
+
+## *Costos de producción*{.tabset}
+
+### Alimentos y Snacks Monterrey
+
+De acuerdo con los datos proveídos, se ha registrado un promedio del 17% de margen de ganancia del portafolio de productos actual, por lo que, se infiere que el coste de producción ronda el 83% aproximadamente del precio de venta al público. Esto significa que por cada 1 MXN de precio de venta al público, Alimentos y Snacks Monterrey suele gastar alrededor de 0.83 MXN en costes de producción.
+
+### HB Alimentos
+
+Según información proveída por Tania Ramírez, estos fueron los principales factores de coste para la fabricación de alimentos en el 2022:
+
+```{r}
+factorcoste=c('Materiales','Mano de obra','Otros gastos de fabricación','Total')
+coste=c('$100K','$50K','$25K','$175K')
+df_cos=data.frame(factorcoste,coste)  
+names(df_cos)<-c('Factor de coste','Coste (USD)')
+```
+
+```{r}
+knitr::kable(head(df_cos),caption ='Costos de producción de *HB Alimentos*') 
+```
+
+El coste de producción suele rondar el 50% del precio de venta al público. Esto significa que por cada 1 USD de precio de venta al público, HB Alimentos suele gastar alrededor de 0.50 USD en costes de producción.
+
+### Sigma Alimentos
+
+Según reportes financieros de Sigma Alimentos, estos fueron los principales factores de coste para la fabricación de alimentos en el 2022:
+
+```{r}
+factorcoste1=c('Materiales','Mano de obra','Otros gastos de fabricación','Total')
+coste1=c('$1.58M','$793M','$396M','$1,190M')
+df_cos1=data.frame(factorcoste1,coste1)  
+names(df_cos1)<-c('Factor de coste','Coste (USD)')
+```
+
+```{r}
+knitr::kable(head(df_cos1),caption ='Costos de producción de *Sigma Alimentos*') 
+```
+
+El coste de producción suele rondar el 50% al 70% del precio de venta al público. Esto significa que por cada 1 USD de precio de venta al público, Sigma Alimentos suele gastar alrededor de 0.50 USD a 0.70 USD en costes de producción.
+
+<hr>
+
+## *Distribución y logística*{.tabset}
+
+### Alimentos y Snacks Monterrey
+
+Los clientes que más ingreso le generaron a Alimentos y Snacks Monterrey, fueron los siguientes:
+
+```{r}
+latitudes=c(25.669217,25.676807,25.677168,25.665774,25.677447) 
+longitudes=c(-100.319725,-100.311216,-100.309244,-100.312612,-100.294436) 
+markers=c('Hotel El Regio','Hotel de Monterrey La Silla','Hoteles y Moteles Paradiso','Compañía Explotadora de Inmuebles Monterrey','Restaurante Ariecchino') 
+df=data.frame(latitudes,longitudes,markers)  
+```
+
+```{r}
+set.api.key('AIzaSyDBnp7Xch3LGWkWemStA20VlUCLGs7_7oQ')
+```
+
+```{r}
+location=paste(df$latitudes,df$longitudes,sep=',')
+Starting='25.680189,-100.306491'
+```
+
+```{r}
+Timedist=gmapsdistance(Starting,location,mode='driving',shape='long')
+Timedist2=data.frame(Timedist)
+names(Timedist2)<-c('Inicio','Destino','Tiempo','Nombre_localizacion','col2','Distancia','col3','col4','Estatus')
+```
+
+```{r}
+Timedist2$Nombre_localizacion<-df$markers
+Timedist2$col2<-NULL      
+Timedist2$col3<-NULL  
+Timedist2$col4<-NULL
+Timedist2$Tiempo<-Timedist2$Tiempo #min
+Timedist$Distancia<-Timedist2$Distancia #m
+```
+
+```{r}
+knitr::kable(head(Timedist2),caption ='Matriz de distancia y tiempo de viaje de *Alimentos y Snacks Monterrey*') 
+```
+
+Alimentos y Snacks Monterrey mantiene una velocidad de entrega de 8.33 metros por minuto. Esto implica que, tomando como ejemplo la entrega más alejada a una distancia de 526 metros, la empresa requiere aproximadamente 63 minutos para llegar a su destino.
+
+### HB Alimentos
+
+De acuerdo a Tania Ramírez, los clientes HORECA más recurrentes de HB Alimentos en el 2022, son los siguientes:
+
+```{r}
+latitudes1=c(25.671913,25.648186,25.655349,25.648471,25.652321) 
+longitudes1=c(-100.322462,-100.342651,-100.342900,-100.333396,-100.339854) 
+markers1=c('Hotel Monterrey','Hotel Presidente Intercontinental Monterrey','Hotel Camino Real Monterrey','Grand Fiesta Americana Monterrey Valle','Hyatt Place Monterrey Valle') 
+df1=data.frame(latitudes1,longitudes1,markers1)  
+```
+
+```{r}
+set.api.key('AIzaSyDBnp7Xch3LGWkWemStA20VlUCLGs7_7oQ')
+```
+
+```{r}
+location1=paste(df1$latitudes1,df1$longitudes1,sep=',')
+Starting1='25.681684,-100.319356'
+```
+
+```{r}
+Timedist1=gmapsdistance(Starting1,location1,mode='driving',shape='long')
+Timedist_horeca=data.frame(Timedist1)
+names(Timedist_horeca)<-c('Inicio','Destino','Tiempo','Nombre_localizacion','col2','Distancia','col3','col4','Estatus')
+```
+
+```{r}
+Timedist_horeca$Nombre_localizacion<-df1$markers1
+Timedist_horeca$col2<-NULL      
+Timedist_horeca$col3<-NULL  
+Timedist_horeca$col4<-NULL
+Timedist_horeca$Tiempo<-Timedist_horeca$Tiempo #min
+Timedist_horeca$Distancia<-Timedist_horeca$Distancia #m
+```
+
+```{r}
+knitr::kable(head(Timedist_horeca),caption ='Matriz de distancia y tiempo de viaje de *HB Alimentos*') 
+```
+
+HB Alimentos mantiene una velocidad de entrega de 9.03 metros por minuto. Esto implica que, tomando como ejemplo la entrega más alejada a una distancia de 801 metros, la empresa requiere aproximadamente 89 minutos para llegar a su destino.
+
+### Sigma Alimentos
+
+Los clientes HORECA que más ingreso le generaron a Sigma Alimentos, fueron los siguientes:
+
+```{r}
+latitudes2=c(25.679099,25.676528,25.649558,25.677166,25.686300) 
+longitudes2=c(-100.270776,-100.288617,-100.334095,-100.352725,-100.316383) 
+markers2=c('El Fogón','Holiday Inn Parque Fundidora','Hotel Quinta Real Monterrey','El Gran Pastor','Hotel San Jose') 
+df2=data.frame(latitudes2,longitudes2,markers2)  
+```
+
+```{r}
+set.api.key('AIzaSyDBnp7Xch3LGWkWemStA20VlUCLGs7_7oQ')
+```
+
+```{r}
+location2=paste(df2$latitudes2,df2$longitudes2,sep=',')
+Starting2='25.662149,-100.284421'
+```
+
+```{r}
+Timedist2=gmapsdistance(Starting2,location2,mode='driving',shape='long')
+Timedist_an=data.frame(Timedist2)
+names(Timedist_an)<-c('Inicio','Destino','Tiempo','Nombre_localizacion','col2','Distancia','col3','col4','Estatus')
+```
+
+```{r}
+Timedist_an$Nombre_localizacion<-df2$markers2
+Timedist_an$col2<-NULL      
+Timedist_an$col3<-NULL  
+Timedist_an$col4<-NULL
+Timedist_an$Tiempo<-Timedist_an$Tiempo #min
+Timedist_an$Distancia<-Timedist_an$Distancia #m
+```
+
+```{r}
+knitr::kable(head(Timedist_an),caption ='Matriz de distancia y tiempo de viaje de *Sigma Alimentos*') 
+```
+
+Sigma Alimentos mantiene una velocidad de entrega de 12.62 metros por minuto. Esto implica que, tomando como ejemplo la entrega más alejada a una distancia de 798 metros, la empresa requiere aproximadamente 63 minutos para llegar a su destino.
+
+<hr>
+
+## *Penetración de mercado*{.tabset}
+
+### Alimentos y Snacks Monterrey
+
+No se cuenta con información para determinar la penetración de mercado actual de Alimentos y Snacks Monterrey.
+
+### HB Alimentos
+
+HB Alimentos es una empresa líder de alimentación en México. La directora de Recursos Humanos estima que la empresa tiene una cuota de mercado de aproximadamente el 7% en Monterrey, Nuevo León.
+
+### Sigma Alimentos
+
+La penetración de mercado de Sigma Alimentos en Monterrey, Nuevo León se estima en torno al 70%. Esto significa que la empresa tiene una fuerte presencia en el mercado y sus productos están disponibles en la mayoría de los establecimientos HORECA de la ciudad.
+
+## Comparativa general
+
+* Alimentos y Snacks Monterrey tiene una eficiencia de producción ligeramente menor que HB Alimentos (83% frente a 85%), pero significativamente menor que la eficiencia de Sigma Alimentos (83% frente a 93%).
+* En términos de tasa de rechazo, Sigma Alimentos tiene la menor tasa de rechazo con un 0.5%, lo que indica una mejor calidad en comparación con HB Alimentos y Alimentos y Snacks Monterrey.
+* En cuanto a los costos de distribución y logística, tanto Alimentos y Snacks Monterrey como Sigma Alimentos tienen un tiempo de 63 minutos, mientras que HB Alimentos tiene un tiempo de 89 minutos. Esto quiere decir que Alimentos y Snacks Monterrey y Sigma Alimentos son más eficientes en este aspecto.
+* En cuanto a la penetración de mercado, Sigma Alimentos tiene una penetración del 70%, lo cual indica un mayor alcance y éxito en comparación con las empresas restantes.
+
+Para finalizar, de acuerdo con los resultados de los factores evaluados, **Sigma Alimentos** resulta ser la mejor opción. Tiene una alta eficiencia de producción (93%), una baja tasa de rechazo (0.5%), costos de distribución y logística eficientes (63 minutos) y una alta penetración de mercado (70%).
+
+# **Modelo de riesgo aplicado**
+
+Una parte fundamental de la propuesta es establecer un modelo de gestión de riesgos para identificar, evaluar y mitigar los posibles riesgos asociados. Durante este proceso, se han identificado 4 riesgos clave en las estrategias y se han implementado controles mitigantes para su gestión efectiva.
+
+<hr>
+
+## Identificación y gestión de riesgos{.tabset}
+
+### Exógeno
+
+*Fluctuaciones económicas importantes a nivel nacional o global*, como una recesión económica que reduzca la capacidad adquisitiva de los consumidores y disminuya la demanda de los productos de Alimentos y Snacks Monterrey.
+
+**Controles mitigantes**
+
+*Establecer alianzas estratégicas con proveedores o socios comerciales en diferentes regiones geográficas o países*. Esto proporciona una mayor estabilidad y diversificación en la cadena de suministro, lo que ayuda a mitigar el riesgo de interrupciones causadas por las fluctuaciones económicas en una región en particular.
+
+### Financiero
+
+*La falta de reactivación de clientes pasivos y la falta de estrategias de retención de clientes* tiene un impacto directo en la rentabilidad de la empresa, su posición competitiva en el mercado y su capacidad para mantener relaciones sólidas con los clientes.
+
+**Controles mitigantes**
+
+*Implementar un sistema de gestión de relaciones con los clientes (CRM, por sus siglas en inglés) y desarrollar programas de fidelización*. El CRM permite a Alimentos y Snacks Monterrey almacenar y gestionar información detallada de los clientes, incluyendo sus preferencias, historial de compras y comunicaciones anteriores. Esto proporciona una visión integral de cada cliente y ayuda a identificar oportunidades de reactivación. Mediante el uso del CRM, Alimentos y Snacks Monterrey puede diseñar estrategias personalizadas de comunicación y promoción para reactivar a los clientes pasivos, como el envío de ofertas especiales o recordatorios de productos relevantes.
+
+Además, desarrollar programas de fidelización efectivos puede ser un control mitigante importante. Estos programas ofrecen incentivos y beneficios exclusivos a los clientes existentes, lo que los motiva a seguir comprando y mantener una relación a largo plazo con Alimentos y Snacks Monterrey. Estos beneficios pueden incluir descuentos, regalos, acceso anticipado a nuevos productos o servicios, entre otros. Estos programas fomentan la lealtad del cliente y reducen la probabilidad de que se vayan a la competencia.
+
+### Operativo
+
+*Fallos en los sistemas informáticos o de producción*, lo que podría resultar en interrupciones en la cadena de suministro, retrasos en la entrega de productos o pérdida de datos importantes.
+
+**Controles mitigantes**
+
+*Mantener un equipo de soporte técnico interno y/o contar con un proveedor de servicios externo confiable que brinde asistencia técnica especializada* en caso de fallos en los sistemas. Esto asegura una respuesta rápida y eficiente ante cualquier incidente y minimiza el tiempo de inactividad de los sistemas y la producción.
+
+### Legal
+
+*Demandas o acciones legales presentadas por clientes o proveedores* debido a problemas de calidad de productos, incumplimiento de contratos o violación de regulaciones gubernamentales. Esto podría dar lugar a sanciones económicas, pérdida de reputación y costos legales significativos.
+
+**Controles mitigantes**
+
+*Implementación de políticas y procedimientos claros en relación a las transacciones comerciales y la gestión de contratos*.
+
+Asimismo, es importante que Alimentos y Snacks Monterrey cuente con un *seguro de responsabilidad civil o de protección legal* que cubra posibles reclamaciones o demandas legales. Este seguro puede ayudar a cubrir los costos legales y los posibles daños o perjuicios en caso de una demanda.
+
+## Matriz de riesgos
+
+```{r}
+riesgo=c('Fluctuaciones económicas importantes a nivel nacional o global','Falta de reactivación de clientes pasivos y de estrategias de retención de clientes','Fallos en los sistemas informáticos o de producción','Demandas o acciones legales presentadas por clientes o proveedores') 
+prob=c('Alto','Alto','Medio','Bajo') 
+score=c(4,4,3,2) 
+imp=c('Alto','Muy alto','Medio','Alto') 
+score1=c(4,5,3,4) 
+riesgoto=c(16,20,9,8) 
+riesgoto1=c('Alto','Muy alto','Medio','Medio') 
+mit1=c('Medio','Bajo','Bajo','Bajo') 
+mit2=c(3,2,2,2) 
+riesgores=c(13,18,7,6) 
+riesgores1=c('Medio','Alto','Bajo','Bajo') 
+df_riesgo=data.frame(riesgo,prob,score,imp,score1,riesgoto,riesgoto1,mit1,mit2,riesgores,riesgores1)  
+```
+
+```{r}
+names(df_riesgo)<-c('Descripción del riesgo','Probabilidad','Score','Impacto','Score','RT_n','RT_niv','EM_niv','EM_n','RR_n','RR_niv')
+```
+
+```{r}
+knitr::kable(head(df_riesgo),caption ='Matriz de riesgos') 
+```
+
+# **Mapa estratégico de trabajo**
+
+Para definir la propuesta y establecer los principales enfoques de trabajo, se ha utilizado un enfoque estratégico basado en la creación de un mapa estratégico. Esta herramienta visual permite comunicar de manera efectiva la propuesta al considerar diferentes perspectivas, objetivos estratégicos, temas clave y áreas de enfoque. Al utilizar un mapa estratégico, se puede presentar de manera coherente cómo todos los elementos de la propuesta se relacionan entre sí.
+
+<hr>
+
+## Perspectivas{.tabset}
+
+### Financiero
+
+La propuesta se centra en objetivos específicos relacionados con el crecimiento de los ingresos. Estos objetivos incluyen el aumento de las ventas totales, el incremento de los ingresos por cliente, la mejora de la rentabilidad del negocio y el aumento de las ventas recurrentes. 
+
+Para lograr estos objetivos, se han diseñado estrategias de expansión en áreas con alto potencial de crecimiento, identificado oportunidades para generar ingresos recurrentes y enfocado en optimizar la eficiencia en la generación de ingresos.
+
+### Cliente
+
+La propuesta se centra en estrategias clave para impulsar el crecimiento, como la expansión en áreas con alto potencial de crecimiento, la venta cruzada y promoción de productos complementarios, así como la identificación de clientes con mayor potencial de compra. Además, se hace enfoque en mejorar la satisfacción y fidelidad del cliente para maximizar su valor a largo plazo. 
+
+Para lograrlo, se implementarán acciones específicas para fomentar la venta cruzada, promocionar productos complementarios, identificar y priorizar a los clientes con mayor potencial de compra, y brindar una experiencia excepcional que aumente la satisfacción y lealtad del cliente.
+
+### Interna
+
+La propuesta se enfoca en la implementación de modelos de conglomerados geoespaciales y el modelo `market basket`, así como en la predicción de ventas de prospectos, con el objetivo de mejorar la eficiencia y la personalización de la oferta y la demanda para los clientes. 
+
+Para lograrlo, se utilizarán modelos de conglomerados geoespaciales para identificar oportunidades de expansión geográfica y adaptar la oferta y demanda a las necesidades específicas de los clientes en cada región. Además, se aplicó el modelo `market basket` y la predicción de ventas de prospectos para identificar los productos más rentables y mejorar la personalización de nuestra oferta y demanda en función de las preferencias de cada cliente. Con estas acciones, se busca brindar una experiencia única y satisfactoria a los clientes, maximizando tanto su satisfacción como los resultados comerciales.
+
+### Aprendizaje y crecimiento
+
+Se centra en reconocer que el desarrollo de capacidades en análisis de datos, la mejora en la gestión del talento y una cultura orientada a la innovación son componentes clave para el éxito. Esto implica fomentar el desarrollo de habilidades en análisis de datos y tecnologías relevantes, así como en técnicas específicas para abordar los desafíos identificados. Al hacerlo, se estarán preparados para encontrar soluciones efectivas y eficientes que ayuden a enfrentar la problemática planteada y alcanzar los objetivos estratégicos.
+
+## Objetivos
+
+Como parte de la estrategia a desarrollar, se han establecido los siguientes objetivos:
+
+* **Incrementar la cuota de mercado y las ventas**: Utilizando el análisis de agrupación geoespacial, se buscará identificar a los clientes potenciales en función de su ubicación geográfica y el tipo de negocio al que pertenecen. Además, mediante la predicción de ventas de estos prospectos, se identificarán aquellos clientes con mayor potencial de compra.
+* **Mejorar la retención de clientes activos**: Mediante un análisis del comportamiento de los clientes activos, se identificarán los patrones de compra, el mercado al que pertenecen (por ejemplo, hoteles, restaurantes, cafeterías, etc.), el tamaño de su empresa y su ubicación geográfica.
+* **Potenciar el catálogo de productos**: Utilizando el modelo de `market basket`, se identificarán los productos y pedidos más frecuentes, así como aquellos que generan mayores beneficios para el negocio. Esto permitirá personalizar la oferta y demanda de manera más efectiva.
+
+## Ejes de trabajo
+
+Los ejes de trabajo son áreas clave en las que la empresa se enfocará estratégicamente para lograr el objetivo de retener y adquirir nuevos clientes.
+
+* **Análisis, limpieza y modelado de datos**: Este eje se centra en el análisis y procesamiento de los datos internos de la organización. Esto implica identificar fuentes de datos relevantes, realizar análisis exploratorios, limpiar y transformar los datos para garantizar su calidad y confiabilidad, y utilizar técnicas de modelado de datos para obtener información y patrones significativos que contribuyan a la propuesta.
+* **Fuentes externas**: En este eje, se busca explorar y utilizar datos provenientes de fuentes externas a la organización. Esto implica identificar fuentes confiables y relevantes, establecer alianzas o acuerdos de colaboración para acceder a esas fuentes, e integrar los datos externos con los internos para obtener una visión más completa y precisa. En este caso específico, se consultaron bases de datos del INEGI y ENIGH, así como informes de estas fuentes sobre los resultados económicos del estado de Nuevo León.
+* **Expansión geográfica**: Este eje se enfoca en expandir la organización hacia nuevos clientes y mercados geográficos con un mayor potencial de crecimiento. Esto implica identificar y evaluar oportunidades en esos mercados a través del análisis geográfico, adaptar la oferta a las necesidades locales y desarrollar alianzas estratégicas para facilitar la retención y adquisición de nuevos clientes.
+* **Personalización de la oferta y la demanda**: Este eje se refiere a adaptar la oferta y la demanda a las necesidades específicas de cada cliente. Esto implica implementar modelos analíticos y técnicas de segmentación para comprender mejor a los clientes, personalizar productos y servicios, y mejorar la experiencia del cliente a través de ofertas relevantes y personalizadas.
+
+<img src='/Users/kizarihdz/Documents/8/Bloques/Planeación estratégica basada en analítica prescriptiva/Reto_Evidencia1_Estrategia2.jpg'>
+
+# **Anexos**
+
+Publicación de código: https://rpubs.com/cvelarde/e1_analisis
+
+Diagramas: https://miro.com/app/board/uXjVMUCdj_o=/?share_link_id=627839563085 
+
+# **Bibliografía**
+
+HB Alimentos. (s.f.). *Nosotros*. HB Alimentos. https://www.hbalimentos.com/index.html
+
+INEGI. (2020). *Encuesta Nacional de Ingresos y Gastos de los Hogares 2020 (ENIGH)*. INEGI. https://www.inegi.org.mx/contenidos/programas/enigh/nc/2020/doc/enigh2020_ns_presentacion_resultados_nl.pdf
+
+OpenAI. (2023). ChatGPT. Comunicación personal.
+
+Ramírez, T. (2023, 27 de mayo). *Entrevista personal HB Alimentos* (Teléfono). Entrevista no publicada.
+
+Secretaría de Economía de los Países Bajos. (2021). *Coyuntura económica - III trimestre 2021*. Secretaría de Economía de los Países Bajos. http://datos.nl.gob.mx/portfolio_page/coyuntura-economica-iii-trimestre-2021/
+
+Scherer, C. (2023). *A ggplot2 Tutorial for Beautiful Plotting in R*. Cédric Scherer. https://cedricscherer.netlify.app/2019/08/05/a-ggplot2-tutorial-for-beautiful-plotting-in-r/
+
+Sigma Alimentos. (2022). *Información financiera*. Sigma Alimentos. https://www.sigma-alimentos.com/informacion-financiera/
+
+Sigma Alimentos. (2022). *Nuestra empresa*. Sigma Alimentos. https://www.sigma-alimentos.com/esto-es-sigma/
+
